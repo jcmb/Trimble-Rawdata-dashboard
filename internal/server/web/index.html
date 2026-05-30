@@ -3,19 +3,32 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
   <title>Trimble RAWDATA Dashboard</title>
-  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/style.css?v=__VERSION__">
 </head>
 <body>
   <header>
     <h1>Trimble RAWDATA Dashboard</h1>
     <div id="status" class="status disconnected">Disconnected</div>
+    <span id="version" class="version">v__VERSION__</span>
   </header>
 
   <main>
     <section class="panel sky-panel">
       <h2>Sky plot</h2>
-      <canvas id="sky" width="420" height="420"></canvas>
+      <div class="sky-wrap">
+        <canvas id="sky" width="420" height="420"></canvas>
+        <div id="sky-legend" class="sky-legend" aria-label="GNSS color key"></div>
+        <div class="slip-legend-wrap">
+          <span class="slip-legend-title">Cycle slip rings <span class="slip-legend-note">(worst band on each SV)</span></span>
+          <div id="slip-legend" class="slip-legend" aria-label="Cycle slip ring colors">
+            <span class="slip-key slip-now">This epoch</span>
+            <span class="slip-key slip-60">&lt; 60 s</span>
+            <span class="slip-key slip-300">&lt; 300 s</span>
+          </div>
+        </div>
+      </div>
       <p id="epoch" class="meta">—</p>
     </section>
 
@@ -28,25 +41,37 @@
         <dt>HDOP</dt><dd id="hdop">—</dd>
         <dt>RMS</dt><dd id="rms">—</dd>
         <dt>SVs used / tracked</dt><dd id="svs">—</dd>
+        <dt>Antenna</dt><dd id="antenna">—</dd>
         <dt>Augmentation</dt><dd id="aug">—</dd>
       </dl>
     </section>
 
     <section class="panel table-panel">
-      <h2>SNR (RT27)</h2>
-      <table>
+      <div class="table-toolbar">
+        <h2>SNR (RT27)</h2>
+        <label class="table-option">
+          <input type="checkbox" id="show-slip-counts">
+          Show slip counts in cells
+        </label>
+      </div>
+      <p id="table-filter" class="table-filter" hidden></p>
+      <div class="table-scroll">
+        <table id="snr-table">
         <thead>
           <tr>
-            <th>System</th>
-            <th>SV</th>
-            <th>El°</th>
-            <th>Az°</th>
-            <th>Blk</th>
-            <th>SNR dB-Hz</th>
+            <th data-sort="system" data-col="system" class="sortable col-system">GNSS system</th>
+            <th data-sort="sv" data-col="sv" class="sortable sorted-asc col-sv">SV</th>
+            <th data-sort="elevation" data-col="elevation" class="sortable col-elevation">El°</th>
+            <th data-sort="azimuth" data-col="azimuth" class="sortable col-azimuth">Az°</th>
+            <th data-sort="l1" data-col="l1" class="sortable col-l1">L1</th>
+            <th data-sort="l2" data-col="l2" class="sortable col-l2">L2</th>
+            <th data-sort="l5" data-col="l5" class="sortable col-l5">L5</th>
+            <th data-sort="l6" data-col="l6" class="sortable col-l6">L6</th>
           </tr>
         </thead>
         <tbody id="snr-body"></tbody>
       </table>
+      </div>
     </section>
   </main>
 
@@ -56,6 +81,6 @@
     <span id="error"></span>
   </footer>
 
-  <script src="/app.js"></script>
+  <script src="/app.js?v=__VERSION__"></script>
 </body>
 </html>

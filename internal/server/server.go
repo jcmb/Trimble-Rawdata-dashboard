@@ -9,10 +9,12 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/hub"
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/store"
+	"github.com/gkirk/trimble-rawdata-dashboard/internal/version"
 )
 
 //go:embed web/*
@@ -30,13 +32,14 @@ func (s *Server) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/snapshot", s.handleSnapshot)
 	mux.HandleFunc("/api/events", s.handleEvents)
-	mux.Handle("/", s.handleStatic())
+	mux.HandleFunc("/api/version", s.handleVersion)
+	mux.HandleFunc("/", s.handleWeb)
 
 	httpSrv := &http.Server{Addr: s.Addr, Handler: mux}
 
 	errCh := make(chan error, 1)
 	go func() {
-		slog.Info("dashboard listening", "addr", s.Addr)
+		slog.Info("dashboard listening", "addr", s.Addr, "version", version.String())
 		err := httpSrv.ListenAndServe()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
@@ -56,6 +59,16 @@ func (s *Server) Run(ctx context.Context) error {
 	case err := <-errCh:
 		return err
 	}
+}
+
+func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"number": version.Number,
+		"build":  version.Build,
+		"full":   version.String(),
+	})
 }
 
 func (s *Server) handleSnapshot(w http.ResponseWriter, r *http.Request) {
@@ -105,10 +118,57 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleStatic() http.Handler {
+func (s *Server) handleWeb(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/")
+	if path == "" {
+		path = "index.html"
+	}
+
+	if path == "index.html" {
+		s.serveIndex(w, r)
+		return
+	}
+
 	sub, err := fs.Sub(webFS, "web")
 	if err != nil {
-		panic(err)
+		http.Error(w, "assets unavailable", http.StatusInternalServerError)
+		return
 	}
-	return http.FileServer(http.FS(sub))
+
+	data, err := fs.ReadFile(sub, path)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	ct := "application/octet-stream"
+	switch {
+	case strings.HasSuffix(path, ".css"):
+		ct = "text/css; charset=utf-8"
+	case strings.HasSuffix(path, ".js"):
+		ct = "application/javascript; charset=utf-8"
+	case strings.HasSuffix(path, ".html"):
+		ct = "text/html; charset=utf-8"
+	}
+	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+	w.Write(data)
+}
+
+func (s *Server) serveIndex(w http.ResponseWriter, r *http.Request) {
+	sub, err := fs.Sub(webFS, "web")
+	if err != nil {
+		http.Error(w, "index unavailable", http.StatusInternalServerError)
+		return
+	}
+	data, err := fs.ReadFile(sub, "index.html")
+	if err != nil {
+		http.Error(w, "index unavailable", http.StatusInternalServerError)
+		return
+	}
+	tag := version.String()
+	html := strings.ReplaceAll(string(data), "__VERSION__", tag)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+	_, _ = w.Write([]byte(html))
 }

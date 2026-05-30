@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"bitbucket.trimble.tools/gnsstl/geoffrey-kirk-go-dcol/conn"
+	"bitbucket.trimble.tools/gnsstl/geoffrey-kirk-go-dcol/dcol"
 	"bitbucket.trimble.tools/gnsstl/geoffrey-kirk-go-dcol/gnss"
 	"bitbucket.trimble.tools/gnsstl/geoffrey-kirk-go-dcol/packet"
 	"bitbucket.trimble.tools/gnsstl/geoffrey-kirk-go-dcol/rawdata"
@@ -137,27 +138,74 @@ func demoRT27(baseAz int) *rawdata.RT27Survey {
 		Header: rawdata.EpochHeader{
 			WeekNumber:     2200,
 			ReceiverTimeMS: int32(time.Now().UnixMilli() % 604800000),
-			NumberSVs:      3,
+			NumberSVs:      5,
 		},
 	}
-	systems := []byte{gnss.SystemGPS, gnss.SystemGPS, gnss.SystemGLONASS}
-	for i, sys := range systems {
-		az := int16((baseAz + i*120) % 360)
-		if az > 180 {
-			az -= 360
+	cases := []struct {
+		sys    byte
+		svid   byte
+		blocks []rawdata.MeasBlock
+	}{
+		{
+			sys: gnss.SystemGPS, svid: 7,
+			blocks: []rawdata.MeasBlock{
+				{BlockNum: 0, BlockType: 0, TrackType: 0, SNR: 42},
+				{BlockNum: 1, BlockType: 1, TrackType: 5, SNR: 38},
+				{BlockNum: 2, BlockType: 2, TrackType: 8, SNR: 35},
+			},
+		},
+		{
+			sys: gnss.SystemSBAS, svid: 133,
+			blocks: []rawdata.MeasBlock{
+				{BlockNum: 0, BlockType: 0, TrackType: 23, SNR: 44},
+				{BlockNum: 1, BlockType: 2, TrackType: 6, SNR: 40},
+			},
+		},
+		{
+			sys: gnss.SystemGalileo, svid: 11,
+			blocks: []rawdata.MeasBlock{
+				{BlockNum: 0, BlockType: 8, TrackType: 23, SNR: 41},
+				{BlockNum: 1, BlockType: 2, TrackType: 11, SNR: 38},
+				{BlockNum: 2, BlockType: 3, TrackType: 11, SNR: 36},
+				{BlockNum: 3, BlockType: 4, TrackType: 14, SNR: 34},
+				{BlockNum: 4, BlockType: 5, TrackType: 26, SNR: 37},
+			},
+		},
+		{
+			sys: gnss.SystemBeidou, svid: 19,
+			blocks: []rawdata.MeasBlock{
+				{BlockNum: 0, BlockType: 6, TrackType: 26, SNR: 43},
+				{BlockNum: 1, BlockType: 7, TrackType: 29, SNR: 36},
+			},
+		},
+		{
+			sys: gnss.SystemGLONASS, svid: 12,
+			blocks: []rawdata.MeasBlock{
+				{BlockNum: 0, BlockType: 0, TrackType: 0, SNR: 39},
+				{BlockNum: 1, BlockType: 1, TrackType: 1, SNR: 37},
+				{BlockNum: 2, BlockType: 1, TrackType: 0, SNR: 35},
+			},
+		},
+	}
+	for i, c := range cases {
+		az := int16((baseAz + i*72) % 360)
+		el := byte(15 + i*15)
+		blocks := make([]rawdata.MeasBlock, len(c.blocks))
+		for j, b := range c.blocks {
+			blocks[j] = b
+			// Demo: GPS SV7 slips every ~120° rotation (after initial lock slip is ignored).
+			if c.svid == 7 && j == 0 && baseAz > 0 && baseAz%90 == 0 {
+				blocks[j].MeasFlags = []byte{dcol.MeasFlag1CycleSlip}
+				blocks[j].CycleSlipCount = byte(baseAz / 90)
+			}
 		}
-		el := byte(20 + i*25)
 		rt.Measurements = append(rt.Measurements, rawdata.Measurement{
-			SVID:      byte(1 + i*3),
-			SVType:    sys,
-			Elevation: el,
-			Azimuth:   az,
-			Blocks: []rawdata.MeasBlock{{
-				BlockNum:  0,
-				SVType:    sys,
-				BlockType: 0,
-				SNR:       38 + float64(i*4),
-			}},
+			SVID:          c.svid,
+			SVType:        c.sys,
+			AntennaNumber: 0,
+			Elevation:     el,
+			Azimuth:       az,
+			Blocks:        blocks,
 		})
 	}
 	return rt
@@ -170,11 +218,11 @@ func demoPosition() *rawdata.EnhancedPosition {
 			ReceiverTimeSec:  float64(time.Now().Unix() % 86400),
 			NumberSVsUsed:    8,
 			NumberSVsTracked: 12,
-			AugmentationType: gnss.PosAugmentAutonomous,
+			AugmentationType: gnss.PosAugmentRTKFixed,
 		},
 		Position: rawdata.PositionBlock{
-			Latitude:  0.654498, // ~37.5°
-			Longitude: -2.094395,
+			Latitude:  39.897088,
+			Longitude: -105.115120,
 			Altitude:  120.5,
 			HDOP:      0.9,
 			RMS:       0.012,

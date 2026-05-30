@@ -14,6 +14,7 @@ import (
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/server"
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/store"
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/verbose"
+	"github.com/gkirk/trimble-rawdata-dashboard/internal/version"
 )
 
 func main() {
@@ -31,6 +32,7 @@ func main() {
 	if vlevel >= verbose.Debug {
 		slog.SetLogLoggerLevel(slog.LevelDebug)
 	}
+	slog.Info("trimble-rawdata-dashboard", "version", version.String())
 
 	if *port == "" && !*demo {
 		slog.Error("provide -port or -demo")

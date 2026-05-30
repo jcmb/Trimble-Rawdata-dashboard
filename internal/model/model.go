@@ -20,8 +20,9 @@ type PositionView struct {
 	Latitude     float64 `json:"latitude"`
 	Longitude    float64 `json:"longitude"`
 	Altitude     float64 `json:"altitude"`
-	Augmentation byte    `json:"augmentation"`
-	SVsUsed      byte    `json:"svsUsed"`
+	Augmentation     byte    `json:"augmentation"`
+	AugmentationText string  `json:"augmentationText"`
+	SVsUsed          byte    `json:"svsUsed"`
 	SVsTracked   byte    `json:"svsTracked"`
 	HDOP         float64 `json:"hdop"`
 	RMS          float64 `json:"rms"`
@@ -29,21 +30,11 @@ type PositionView struct {
 }
 
 type RT27View struct {
-	Week    uint16       `json:"week"`
-	TimeSec float64      `json:"timeSec"`
-	NumSVs  byte         `json:"numSVs"`
-	Signals []SignalView `json:"signals"`
-}
-
-type SignalView struct {
-	System     byte    `json:"system"`
-	SystemName string  `json:"systemName"`
-	SVID       byte    `json:"svid"`
-	Azimuth    int16   `json:"azimuth"`
-	Elevation  byte    `json:"elevation"`
-	Block      int     `json:"block"`
-	BlockType  byte    `json:"blockType"`
-	SNR        float64 `json:"snr"`
+	Week     uint16      `json:"week"`
+	TimeSec  float64     `json:"timeSec"`
+	NumSVs   byte        `json:"numSVs"`
+	Antennas string      `json:"antennas,omitempty"`
+	SVs      []SVRowView `json:"svs"`
 }
 
 // Event is pushed over SSE when state changes.
