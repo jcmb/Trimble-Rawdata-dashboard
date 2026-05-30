@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trimble RAWDATA Dashboard</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>Trimble RAWDATA Dashboard</h1>
+    <div id="status" class="status disconnected">Disconnected</div>
+  </header>
+
+  <main>
+    <section class="panel sky-panel">
+      <h2>Sky plot</h2>
+      <canvas id="sky" width="420" height="420"></canvas>
+      <p id="epoch" class="meta">—</p>
+    </section>
+
+    <section class="panel pos-panel">
+      <h2>Enhanced position</h2>
+      <dl id="position">
+        <dt>Latitude</dt><dd id="lat">—</dd>
+        <dt>Longitude</dt><dd id="lon">—</dd>
+        <dt>Altitude</dt><dd id="alt">—</dd>
+        <dt>HDOP</dt><dd id="hdop">—</dd>
+        <dt>RMS</dt><dd id="rms">—</dd>
+        <dt>SVs used / tracked</dt><dd id="svs">—</dd>
+        <dt>Augmentation</dt><dd id="aug">—</dd>
+      </dl>
+    </section>
+
+    <section class="panel table-panel">
+      <h2>SNR (RT27)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>System</th>
+            <th>SV</th>
+            <th>El°</th>
+            <th>Az°</th>
+            <th>Blk</th>
+            <th>SNR dB-Hz</th>
+          </tr>
+        </thead>
+        <tbody id="snr-body"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <footer>
+    <span id="counts">packets: 0 · raw: 0</span>
+    <span id="port"></span>
+    <span id="error"></span>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

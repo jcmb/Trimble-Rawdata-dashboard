@@ -1,0 +1,127 @@
+:root {
+  --bg: #0f1419;
+  --panel: #1a2332;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --accent: #58a6ff;
+  --ok: #3fb950;
+  --warn: #d29922;
+  --err: #f85149;
+  --border: #30363d;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+header, footer {
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+footer {
+  border-bottom: none;
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+  font-size: 0.85rem;
+  color: var(--muted);
+  gap: 1.5rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+h2 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.status {
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.status.connected { background: rgba(63, 185, 80, 0.2); color: var(--ok); }
+.status.disconnected { background: rgba(248, 81, 73, 0.15); color: var(--err); }
+
+main {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(240px, 320px);
+  grid-template-rows: auto auto;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.sky-panel { grid-row: span 2; }
+
+.table-panel { grid-column: 1 / -1; }
+
+canvas#sky {
+  display: block;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.meta {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0.5rem 0 0;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 1rem;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+dt { color: var(--muted); }
+dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+th { color: var(--muted); font-weight: 500; }
+
+#error { color: var(--err); }
+
+@media (max-width: 800px) {
+  main { grid-template-columns: 1fr; }
+  .sky-panel { grid-row: auto; }
+}
