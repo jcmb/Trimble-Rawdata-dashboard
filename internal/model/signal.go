@@ -21,15 +21,18 @@ type BandView struct {
 
 // SVRowView is one satellite row in the RT27 table.
 type SVRowView struct {
-	System        byte     `json:"system"`
-	SystemName    string   `json:"systemName"`
-	SVID          byte     `json:"svid"`
-	Azimuth       int16    `json:"azimuth"`
-	Elevation     byte     `json:"elevation"`
-	L1            BandView `json:"l1"`
-	L2            BandView `json:"l2"`
-	L5            BandView `json:"l5"`
-	L6            BandView `json:"l6"`
+	System           byte     `json:"system"`
+	SystemName       string   `json:"systemName"`
+	SVID             byte     `json:"svid"`
+	Azimuth          int16    `json:"azimuth"`
+	Elevation        byte     `json:"elevation"`
+	UsedInSolution   bool     `json:"usedInSolution,omitempty"`
+	RAIMFault        bool     `json:"raimFault,omitempty"`
+	Unhealthy        bool     `json:"unhealthy,omitempty"`
+	L1               BandView `json:"l1"`
+	L2               BandView `json:"l2"`
+	L5               BandView `json:"l5"`
+	L6               BandView `json:"l6"`
 }
 
 // TrackTypeName maps RT27 TrackType to a short label (pydcollib GetSNRs sys_sig_names).

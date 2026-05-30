@@ -28,22 +28,45 @@
             <span class="slip-key slip-300">&lt; 300 s</span>
           </div>
         </div>
+        <button type="button" id="filter-used" class="legend-item used-filter-btn" title="Click: used only · not used · show all">
+          <span class="legend-swatch used-swatch" aria-hidden="true"></span>
+          <span class="used-filter-label">Used in position</span>
+        </button>
       </div>
       <p id="epoch" class="meta">—</p>
     </section>
 
     <section class="panel pos-panel">
       <h2>Enhanced position</h2>
-      <dl id="position">
+      <dl id="position" class="pos-main">
         <dt>Latitude</dt><dd id="lat">—</dd>
         <dt>Longitude</dt><dd id="lon">—</dd>
         <dt>Altitude</dt><dd id="alt">—</dd>
-        <dt>HDOP</dt><dd id="hdop">—</dd>
-        <dt>RMS</dt><dd id="rms">—</dd>
+        <dt>σ U</dt><dd id="sigma-u">—</dd>
+        <dt>σ Horizontal</dt><dd id="sigma-h">—</dd>
+        <dt>Age of data</dt><dd id="data-age">—</dd>
         <dt>SVs used / tracked</dt><dd id="svs">—</dd>
         <dt>Antenna</dt><dd id="antenna">—</dd>
         <dt>Augmentation</dt><dd id="aug">—</dd>
       </dl>
+      <details class="pos-details">
+        <summary>Details</summary>
+        <dl class="pos-details-grid">
+          <dt>Velocity N</dt><dd id="vel-n">—</dd>
+          <dt>Velocity E</dt><dd id="vel-e">—</dd>
+          <dt>Velocity U</dt><dd id="vel-u">—</dd>
+          <dt>HDOP</dt><dd id="hdop">—</dd>
+          <dt>VDOP</dt><dd id="vdop">—</dd>
+          <dt>TDOP</dt><dd id="tdop">—</dd>
+          <dt>RMS</dt><dd id="rms">—</dd>
+          <dt>σ N</dt><dd id="sigma-n">—</dd>
+          <dt>σ E</dt><dd id="sigma-e">—</dd>
+          <dt>σ U</dt><dd id="sigma-u-detail">—</dd>
+          <dt>Unit σ</dt><dd id="unit-std">—</dd>
+          <dt>Clock offset</dt><dd id="clock-offset">—</dd>
+          <dt>Clock drift</dt><dd id="clock-drift">—</dd>
+        </dl>
+      </details>
     </section>
 
     <section class="panel table-panel">
@@ -61,6 +84,7 @@
           <tr>
             <th data-sort="system" data-col="system" class="sortable col-system">GNSS system</th>
             <th data-sort="sv" data-col="sv" class="sortable sorted-asc col-sv">SV</th>
+            <th data-sort="used" data-col="used" class="sortable col-used">Used</th>
             <th data-sort="elevation" data-col="elevation" class="sortable col-elevation">El°</th>
             <th data-sort="azimuth" data-col="azimuth" class="sortable col-azimuth">Az°</th>
             <th data-sort="l1" data-col="l1" class="sortable col-l1">L1</th>

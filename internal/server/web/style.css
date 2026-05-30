@@ -213,6 +213,31 @@ canvas#sky {
 .slip-key.slip-60 { background: var(--slip-60-bg); }
 .slip-key.slip-300 { background: var(--slip-300-bg); }
 
+.used-filter-btn {
+  max-width: 420px;
+}
+
+.legend-swatch.used-swatch {
+  background: transparent;
+  box-shadow: 0 0 0 2px var(--ok);
+}
+
+.used-filter-btn.filter-unused .legend-swatch.used-swatch {
+  box-shadow: 0 0 0 2px var(--muted);
+}
+
+.used-filter-btn.filter-unused.filter-active {
+  border-color: var(--muted);
+  background: rgba(139, 148, 158, 0.12);
+}
+
+.legend-item.disabled,
+.legend-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 td.band.slip-now { background: var(--slip-now-bg); }
 td.band.slip-60 { background: var(--slip-60-bg); }
 td.band.slip-300 { background: var(--slip-300-bg); }
@@ -269,6 +294,85 @@ dl {
 dt { color: var(--muted); }
 dd { margin: 0; font-variant-numeric: tabular-nums; }
 
+.pos-details {
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
+}
+
+.pos-details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.85rem;
+  user-select: none;
+  list-style: none;
+}
+
+.pos-details summary::-webkit-details-marker { display: none; }
+
+.pos-details summary::before {
+  content: '▸ ';
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+.pos-details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.pos-details-grid {
+  margin-top: 0.65rem;
+}
+
+.sv-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.sv-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.sv-tag.sv-raim {
+  background: rgba(248, 81, 73, 0.22);
+  color: var(--err);
+}
+
+td.col-used {
+  text-align: center;
+  white-space: nowrap;
+}
+
+td.col-used.yes {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+td.col-used.no {
+  color: var(--muted);
+}
+
+td.col-used.empty {
+  color: var(--muted);
+}
+
+#snr-table th.col-used {
+  text-align: center;
+}
+
+tr.sv-raim td.col-sv {
+  box-shadow: inset 3px 0 0 var(--err);
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -324,6 +428,21 @@ td.sv-type {
   background: rgba(88, 166, 255, 0.2);
   border-color: var(--accent);
   box-shadow: 0 0 0 1px rgba(88, 166, 255, 0.35);
+}
+
+.legend-item.filter-hidden {
+  opacity: 0.55;
+  border-color: var(--muted);
+  background: rgba(139, 148, 158, 0.1);
+}
+
+.legend-item.filter-hidden .legend-swatch {
+  background: var(--muted) !important;
+  box-shadow: none;
+}
+
+.legend-item.filter-hidden span:last-child {
+  text-decoration: line-through;
 }
 
 .legend-item.dimmed {

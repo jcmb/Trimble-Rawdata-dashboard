@@ -10,6 +10,7 @@ const errorEl = document.getElementById('error');
 const skyLegendEl = document.getElementById('sky-legend');
 const tableFilterEl = document.getElementById('table-filter');
 const showSlipCountsEl = document.getElementById('show-slip-counts');
+const filterUsedEl = document.getElementById('filter-used');
 
 const BAND_LABELS = { l1: 'L1', l2: 'L2', l5: 'L5', l6: 'L6' };
 
@@ -18,6 +19,7 @@ const BAND_COLS = ['l1', 'l2', 'l5', 'l6'];
 
 const SLIP_RANK = { none: 0, '300': 1, '60': 2, now: 3 };
 const SLIP_RING = { now: '#f85149', '60': '#d29922', '300': '#8b6914' };
+const USED_RING = '#3fb950';
 
 /** Sky plot color key — click to filter by constellation (hover for description). */
 const SKY_LEGEND = [
@@ -43,7 +45,11 @@ const ARROW_DOWN = '\u25BC';
 let allRows = [];
 let sortCol = 'sv';
 let sortDir = 1;
-let filterLegendKey = null;
+/** @type {Map<string, 'only' | 'hide'>} */
+const filterSystemModes = new Map();
+/** @type {null | 'used' | 'unused'} */
+let filterUsedMode = null;
+let hasPositionSVData = false;
 let lastEpochSec = null;
 let showSlipCounts = localStorage.getItem('showSlipCounts') === '1';
 
@@ -210,11 +216,33 @@ function systemColor(name, sys) {
   return `hsl(${(sys * 47) % 360}, 60%, 55%)`;
 }
 
+function legendKeyForRow(row) {
+  const item = legendForSystem(row.systemName);
+  return item?.key ?? OTHER_LEGEND.key;
+}
+
+function rowMatchesSystemFilter(row) {
+  const key = legendKeyForRow(row);
+  const mode = filterSystemModes.get(key);
+  if (mode === 'hide') return false;
+
+  const onlyKeys = [];
+  for (const [k, m] of filterSystemModes) {
+    if (m === 'only') onlyKeys.push(k);
+  }
+  if (onlyKeys.length && !onlyKeys.includes(key)) return false;
+  return true;
+}
+
 function rowMatchesFilter(row) {
-  if (!filterLegendKey) return true;
-  const item = legendEntryForKey(filterLegendKey);
-  if (!item) return true;
-  return item.match.includes(row.systemName);
+  if (!rowMatchesSystemFilter(row)) return false;
+  if (filterUsedMode === 'used' && !row.usedInSolution) return false;
+  if (filterUsedMode === 'unused' && row.usedInSolution) return false;
+  return true;
+}
+
+function hasActiveFilters() {
+  return filterSystemModes.size > 0 || filterUsedMode != null;
 }
 
 function visibleRows() {
@@ -233,38 +261,95 @@ function makeLegendButton(item) {
   btn.type = 'button';
   btn.className = 'legend-item';
   btn.dataset.key = item.key;
-  btn.title = `${item.description} Click to show only ${item.label}. Click again to show all.`;
+  btn.title = `${item.description} Click: ${item.label} only · hide ${item.label} · show all.`;
   btn.innerHTML = `<span class="legend-swatch" style="background:${item.color}"></span><span>${item.label}</span>`;
   btn.addEventListener('click', () => toggleConstellationFilter(item.key));
   return btn;
 }
 
 function toggleConstellationFilter(key) {
-  filterLegendKey = filterLegendKey === key ? null : key;
+  const current = filterSystemModes.get(key);
+  if (!current) filterSystemModes.set(key, 'only');
+  else if (current === 'only') filterSystemModes.set(key, 'hide');
+  else filterSystemModes.delete(key);
+  updateLegendUI();
+  refreshDataView();
+}
+
+function toggleUsedFilter() {
+  if (filterUsedMode === null) filterUsedMode = 'used';
+  else if (filterUsedMode === 'used') filterUsedMode = 'unused';
+  else filterUsedMode = null;
+  updateLegendUI();
+  refreshDataView();
+}
+
+function clearAllFilters() {
+  filterSystemModes.clear();
+  filterUsedMode = null;
   updateLegendUI();
   refreshDataView();
 }
 
 function clearConstellationFilter() {
-  filterLegendKey = null;
-  updateLegendUI();
-  refreshDataView();
+  clearAllFilters();
+}
+
+function usedFilterLabel(mode) {
+  if (mode === 'used') return 'Used in position';
+  if (mode === 'unused') return 'Not used in position';
+  return 'Used in position';
+}
+
+function constellationFilterTitle(key, mode) {
+  const item = legendEntryForKey(key);
+  const label = item?.label ?? key;
+  const desc = item?.description ?? '';
+  if (mode === 'only') return `${desc} Showing ${label} only. Click to hide ${label}.`;
+  if (mode === 'hide') return `${desc} Hiding ${label}. Click to show all systems.`;
+  return `${desc} Click: ${label} only · hide ${label} · show all.`;
 }
 
 function updateLegendUI() {
-  skyLegendEl.querySelectorAll('.legend-item').forEach(el => {
+  const anyOnly = [...filterSystemModes.values()].some(m => m === 'only');
+  skyLegendEl.querySelectorAll('.legend-item[data-key]').forEach(el => {
     const key = el.dataset.key;
-    const isActive = filterLegendKey === key;
-    el.classList.toggle('filter-active', isActive);
-    el.classList.toggle('dimmed', filterLegendKey && !isActive);
+    const mode = filterSystemModes.get(key);
+    el.classList.toggle('filter-active', mode === 'only');
+    el.classList.toggle('filter-hidden', mode === 'hide');
+    el.classList.toggle('dimmed', anyOnly && mode !== 'only');
+    el.title = constellationFilterTitle(key, mode);
   });
 
-  const item = filterLegendKey ? legendEntryForKey(filterLegendKey) : null;
-  if (item) {
+  if (filterUsedEl) {
+    filterUsedEl.classList.toggle('filter-active', filterUsedMode != null);
+    filterUsedEl.classList.toggle('filter-unused', filterUsedMode === 'unused');
+    filterUsedEl.disabled = !hasPositionSVData;
+    filterUsedEl.classList.toggle('disabled', !hasPositionSVData);
+    const label = filterUsedEl.querySelector('.used-filter-label');
+    if (label) label.textContent = usedFilterLabel(filterUsedMode);
+    filterUsedEl.title = filterUsedMode === null
+      ? 'Click: used only · Click again: not used · Click again: show all'
+      : filterUsedMode === 'used'
+        ? 'Showing used in position only. Click for not used.'
+        : 'Showing not used in position only. Click to show all.';
+  }
+
+  const filters = [];
+  for (const [key, mode] of filterSystemModes) {
+    const item = legendEntryForKey(key);
+    if (!item) continue;
+    if (mode === 'only') filters.push(`Only ${escapeHtml(item.label)}`);
+    if (mode === 'hide') filters.push(`Hide ${escapeHtml(item.label)}`);
+  }
+  if (filterUsedMode === 'used') filters.push('Used in position');
+  if (filterUsedMode === 'unused') filters.push('Not used in position');
+
+  if (filters.length) {
     const n = visibleRows().length;
     tableFilterEl.hidden = false;
-    tableFilterEl.innerHTML = `Filtered to <strong>${escapeHtml(item.label)}</strong> (${n} SV${n === 1 ? '' : 's'}).<button type="button" id="clear-filter">Show all</button>`;
-    document.getElementById('clear-filter')?.addEventListener('click', clearConstellationFilter);
+    tableFilterEl.innerHTML = `Filtered to ${filters.map(f => `<strong>${f}</strong>`).join(' + ')} (${n} SV${n === 1 ? '' : 's'}).<button type="button" id="clear-filter">Show all</button>`;
+    document.getElementById('clear-filter')?.addEventListener('click', clearAllFilters);
   } else {
     tableFilterEl.hidden = true;
     tableFilterEl.innerHTML = '';
@@ -354,6 +439,14 @@ function drawSky(rows) {
       ctx.stroke();
     }
 
+    if (hasPositionSVData && row.usedInSolution) {
+      ctx.beginPath();
+      ctx.arc(x, y, 9, 0, Math.PI * 2);
+      ctx.strokeStyle = USED_RING;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
     ctx.beginPath();
     ctx.fillStyle = color;
     ctx.arc(x, y, 7, 0, Math.PI * 2);
@@ -366,20 +459,95 @@ function drawSky(rows) {
   }
 }
 
+function fmtM(value, digits, unit) {
+  if (value == null || Number.isNaN(value)) return '—';
+  return `${value.toFixed(digits)}${unit ? ` ${unit}` : ''}`;
+}
+
+function fmtVel(value) {
+  return fmtM(value, 3, 'm/s');
+}
+
+function fmtSigma(value) {
+  return fmtM(value, 4, 'm');
+}
+
+function fmtAge(pos) {
+  if (pos?.rtk?.ageSec != null) return `${pos.rtk.ageSec.toFixed(2)} s`;
+  return '—';
+}
+
+function svHoverDetail(row) {
+  const parts = [`${row.systemName} PRN ${row.svid}`];
+  if (row.usedInSolution) parts.push('used in position');
+  else parts.push('not used in position');
+  if (row.raimFault) parts.push('RAIM fault');
+  if (row.unhealthy) parts.push('unhealthy');
+  return parts.join(' · ');
+}
+
+function fmtSVCell(row) {
+  let tags = '';
+  if (row.raimFault) {
+    tags += '<span class="sv-tag sv-raim" title="RAIM fault">!</span>';
+  }
+  const body = tags
+    ? `<span class="sv-cell"><span class="sv-id">${row.svid}</span>${tags}</span>`
+    : String(row.svid);
+  return fmtTd('sv', 'col-sv', body, svHoverDetail(row));
+}
+
+function fmtUsedCell(row) {
+  if (!hasPositionSVData) {
+    return fmtTd('used', 'col-used empty', '—', 'Position SV list not available');
+  }
+  const used = !!row.usedInSolution;
+  const label = used ? 'Yes' : 'No';
+  const cls = used ? 'col-used yes' : 'col-used no';
+  const title = used ? 'Used in position solution' : 'Not used in position solution';
+  return fmtTd('used', cls, label, title);
+}
+
 function updatePosition(pos, rt27) {
   const set = (id, val) => { document.getElementById(id).textContent = val; };
+  const clearIds = [
+    'lat', 'lon', 'alt', 'sigma-u', 'sigma-h', 'data-age', 'svs', 'aug',
+    'vel-n', 'vel-e', 'vel-u', 'hdop', 'vdop', 'tdop', 'rms',
+    'sigma-n', 'sigma-e', 'sigma-u-detail', 'unit-std', 'clock-offset', 'clock-drift',
+  ];
   if (!pos) {
-    ['lat', 'lon', 'alt', 'hdop', 'rms', 'svs', 'aug'].forEach(id => set(id, '—'));
+    clearIds.forEach(id => set(id, '—'));
   } else {
     set('lat', fmtDMS(pos.latitude, true));
     set('lon', fmtDMS(pos.longitude, false));
-    set('alt', pos.altitude.toFixed(2) + ' m');
-    set('hdop', pos.hdop.toFixed(2));
-    set('rms', pos.rms.toFixed(4) + ' m');
+    set('alt', fmtM(pos.altitude, 2, 'm'));
+    set('sigma-u', fmtSigma(pos.sigmaU));
+    set('sigma-h', fmtSigma(pos.sigmaH ?? horizontalSigma(pos.sigmaN, pos.sigmaE)));
+    set('data-age', fmtAge(pos));
     set('svs', `${pos.svsUsed} / ${pos.svsTracked}`);
     set('aug', pos.augmentationText || String(pos.augmentation));
+
+    set('vel-n', fmtVel(pos.velocityN));
+    set('vel-e', fmtVel(pos.velocityE));
+    set('vel-u', fmtVel(pos.velocityU));
+    set('hdop', fmtM(pos.hdop, 2, ''));
+    set('vdop', fmtM(pos.vdop, 2, ''));
+    set('tdop', fmtM(pos.tdop, 2, ''));
+    set('rms', fmtSigma(pos.rms));
+    set('sigma-n', fmtSigma(pos.sigmaN));
+    set('sigma-e', fmtSigma(pos.sigmaE));
+    set('sigma-u-detail', fmtSigma(pos.sigmaU));
+    set('unit-std', fmtSigma(pos.unitStdDev));
+    set('clock-offset', fmtM(pos.clockOffset, 6, 's'));
+    set('clock-drift', fmtM(pos.clockDrift, 3, 's/s'));
   }
   set('antenna', rt27?.antennas || '—');
+}
+
+function horizontalSigma(sigmaN, sigmaE) {
+  const n = sigmaN ?? 0;
+  const e = sigmaE ?? 0;
+  return Math.hypot(n, e);
 }
 
 function bandSNR(band) {
@@ -393,6 +561,11 @@ function compareRows(a, b, col) {
       return a.systemName.localeCompare(b.systemName) || a.svid - b.svid;
     case 'sv':
       return a.svid - b.svid || a.system - b.system;
+    case 'used': {
+      const au = a.usedInSolution ? 1 : 0;
+      const bu = b.usedInSolution ? 1 : 0;
+      return au - bu || a.svid - b.svid || a.system - b.system;
+    }
     case 'elevation':
       return a.elevation - b.elevation || a.svid - b.svid;
     case 'azimuth':
@@ -451,9 +624,11 @@ function updateSNRTable(rows) {
 
   for (const row of sortedRows(rows)) {
     const tr = document.createElement('tr');
+    if (row.raimFault) tr.classList.add('sv-raim');
     tr.innerHTML = `
       ${fmtTd('system', 'col-system', escapeHtml(row.systemName), `${row.systemName} · system ${row.system}`)}
-      ${fmtTd('sv', 'col-sv', String(row.svid), `${row.systemName} PRN ${row.svid}`)}
+      ${fmtSVCell(row)}
+      ${fmtUsedCell(row)}
       ${fmtTd('elevation', 'col-elevation', String(row.elevation), `Elevation ${row.elevation}°`)}
       ${fmtTd('azimuth', 'col-azimuth', String(positiveAz(row.azimuth)), `Azimuth ${positiveAz(row.azimuth)}°`)}
       ${fmtBandCell(row.l1, 'l1')}
@@ -484,19 +659,40 @@ function applySnapshot(snap) {
   portEl.textContent = snap.port ? `port: ${snap.port}` : 'demo mode';
   errorEl.textContent = snap.lastError || '';
 
+  hasPositionSVData = (snap.position?.svs?.length ?? 0) > 0;
+
   if (snap.rt27) {
     allRows = snap.rt27.svs || [];
     enrichSlipState(snap.rt27, allRows);
     const t = snap.rt27.timeSec.toFixed(3);
     const total = allRows.length;
     const shown = visibleRows().length;
-    let epoch = `GPS week ${snap.rt27.week} · t=${t}s · ${snap.rt27.numSVs} SVs · ${total} rows`;
-    if (filterLegendKey && shown !== total) epoch += ` · showing ${shown}`;
+    let epoch = `GPS week ${snap.rt27.week} · t=${t}s · ${snap.rt27.numSVs} SVs`;
+    if (hasActiveFilters()) {
+      if (shown !== total) epoch += ` · showing ${shown}`;
+    }
     epochEl.textContent = epoch;
+    refreshDataView();
+  } else if (snap.position && allRows.length) {
+    mergePositionFlags(snap.position, allRows);
     refreshDataView();
   }
 
   updatePosition(snap.position, snap.rt27);
+}
+
+function mergePositionFlags(pos, rows) {
+  if (!pos?.svs?.length) return;
+  const lookup = new Map();
+  for (const sv of pos.svs) {
+    lookup.set(`${sv.system}:${sv.svid}`, sv);
+  }
+  for (const row of rows) {
+    const sv = lookup.get(`${row.system}:${row.svid}`);
+    row.usedInSolution = sv?.usedInSolution ?? false;
+    row.raimFault = sv?.raimFault ?? false;
+    row.unhealthy = sv?.unhealthy ?? false;
+  }
 }
 
 document.querySelectorAll('#snr-table th.sortable').forEach(th => {
@@ -506,7 +702,7 @@ document.querySelectorAll('#snr-table th.sortable').forEach(th => {
     if (sortCol === col) sortDir = -sortDir;
     else {
       sortCol = col;
-      sortDir = (col === 'l1' || col === 'l2' || col === 'l5' || col === 'l6') ? -1 : 1;
+      sortDir = (col === 'l1' || col === 'l2' || col === 'l5' || col === 'l6' || col === 'used') ? -1 : 1;
     }
     updateSNRTable(visibleRows());
   });
@@ -541,3 +737,5 @@ if (showSlipCountsEl) {
     updateSNRTable(visibleRows());
   });
 }
+
+filterUsedEl?.addEventListener('click', toggleUsedFilter);

@@ -15,18 +15,35 @@ type Snapshot struct {
 }
 
 type PositionView struct {
-	Week         uint16  `json:"week"`
-	TimeSec      float64 `json:"timeSec"`
-	Latitude     float64 `json:"latitude"`
-	Longitude    float64 `json:"longitude"`
-	Altitude     float64 `json:"altitude"`
+	Week             uint16  `json:"week"`
+	TimeSec          float64 `json:"timeSec"`
+	Latitude         float64 `json:"latitude"`
+	Longitude        float64 `json:"longitude"`
+	Altitude         float64 `json:"altitude"`
+	VelocityN        float64 `json:"velocityN"`
+	VelocityE        float64 `json:"velocityE"`
+	VelocityU        float64 `json:"velocityU"`
+	ClockOffset      float64 `json:"clockOffset"`
+	ClockDrift       float64 `json:"clockDrift"`
+	HDOP             float64 `json:"hdop"`
+	VDOP             float64 `json:"vdop"`
+	TDOP             float64 `json:"tdop"`
+	SigmaN           float64 `json:"sigmaN"`
+	SigmaE           float64 `json:"sigmaE"`
+	SigmaU           float64 `json:"sigmaU"`
+	SigmaH           float64 `json:"sigmaH"`
+	RMS              float64 `json:"rms"`
+	UnitStdDev       float64 `json:"unitStdDev"`
 	Augmentation     byte    `json:"augmentation"`
 	AugmentationText string  `json:"augmentationText"`
 	SVsUsed          byte    `json:"svsUsed"`
-	SVsTracked   byte    `json:"svsTracked"`
-	HDOP         float64 `json:"hdop"`
-	RMS          float64 `json:"rms"`
-	SolutionMode byte    `json:"solutionMode"`
+	SVsTracked       byte    `json:"svsTracked"`
+	SolutionMode     byte    `json:"solutionMode"`
+	RAIMInfo         byte    `json:"raimInfo,omitempty"`
+	MotionState      byte    `json:"motionState,omitempty"`
+	ProcessingType   byte    `json:"processingType,omitempty"`
+	RTK              *RTKView         `json:"rtk,omitempty"`
+	SVs              []PositionSVView `json:"svs,omitempty"`
 }
 
 type RT27View struct {

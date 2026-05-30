@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -64,8 +65,10 @@ func (s *Store) ApplyRAW(msg rawdata.Message) model.Snapshot {
 	switch m := msg.(type) {
 	case *rawdata.RT27Survey:
 		s.snap.RT27 = rt27View(m)
+		mergePositionSVs(s.snap.RT27, s.snap.Position)
 	case *rawdata.EnhancedPosition:
 		s.snap.Position = positionView(m)
+		mergePositionSVs(s.snap.RT27, s.snap.Position)
 	}
 	return s.snap
 }
@@ -202,18 +205,79 @@ func normalizeAzimuth(az int16) int16 {
 
 func positionView(m *rawdata.EnhancedPosition) *model.PositionView {
 	aug := m.Header.AugmentationType
-	return &model.PositionView{
+	p := m.Position
+	v := &model.PositionView{
 		Week:             m.Header.WeekNumber,
 		TimeSec:          m.Header.ReceiverTimeSec,
-		Latitude:         m.Position.Latitude,
-		Longitude:        m.Position.Longitude,
-		Altitude:         m.Position.Altitude,
+		Latitude:         p.Latitude,
+		Longitude:        p.Longitude,
+		Altitude:         p.Altitude,
+		VelocityN:        p.VelocityN,
+		VelocityE:        p.VelocityE,
+		VelocityU:        p.VelocityU,
+		ClockOffset:      p.ClockOffset,
+		ClockDrift:       p.ClockDrift,
+		HDOP:             p.HDOP,
+		VDOP:             p.VDOP,
+		TDOP:             p.TDOP,
+		SigmaN:           p.SigmaN,
+		SigmaE:           p.SigmaE,
+		SigmaU:           p.SigmaU,
+		SigmaH:           model.HorizontalSigma(p.SigmaN, p.SigmaE),
+		RMS:              p.RMS,
+		UnitStdDev:       p.UnitStdDev,
 		Augmentation:     aug,
 		AugmentationText: model.AugmentationName(aug),
 		SVsUsed:          m.Header.NumberSVsUsed,
 		SVsTracked:       m.Header.NumberSVsTracked,
-		HDOP:             m.Position.HDOP,
-		RMS:              m.Position.RMS,
 		SolutionMode:     m.Header.SolutionMode,
+		RAIMInfo:         m.Header.RAIMInfo,
+		MotionState:      m.Header.MotionState,
+		ProcessingType:   m.Header.ProcessingType,
 	}
+	if m.RTK != nil {
+		v.RTK = &model.RTKView{
+			Mode:   m.RTK.Mode,
+			AgeSec: m.RTK.Age,
+			Flags:  m.RTK.Flags,
+		}
+	}
+	for _, sv := range m.SVs {
+		used, raim, unhealthy := model.PositionSVFlags(sv.Flag)
+		v.SVs = append(v.SVs, model.PositionSVView{
+			System:         sv.SVType,
+			SystemName:     model.SystemName(sv.SVType),
+			SVID:           sv.SVID,
+			Flag:           sv.Flag,
+			UsedInSolution: used,
+			RAIMFault:      raim,
+			Unhealthy:      unhealthy,
+		})
+	}
+	return v
+}
+
+func mergePositionSVs(rt27 *model.RT27View, pos *model.PositionView) {
+	if rt27 == nil || pos == nil || len(pos.SVs) == 0 {
+		return
+	}
+	lookup := make(map[string]model.PositionSVView, len(pos.SVs))
+	for _, sv := range pos.SVs {
+		lookup[svKey(sv.System, sv.SVID)] = sv
+	}
+	for i := range rt27.SVs {
+		row := &rt27.SVs[i]
+		row.UsedInSolution = false
+		row.RAIMFault = false
+		row.Unhealthy = false
+		if psv, ok := lookup[svKey(row.System, row.SVID)]; ok {
+			row.UsedInSolution = psv.UsedInSolution
+			row.RAIMFault = psv.RAIMFault
+			row.Unhealthy = psv.Unhealthy
+		}
+	}
+}
+
+func svKey(system, svid byte) string {
+	return fmt.Sprintf("%d:%d", system, svid)
 }

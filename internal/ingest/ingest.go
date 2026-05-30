@@ -212,20 +212,44 @@ func demoRT27(baseAz int) *rawdata.RT27Survey {
 }
 
 func demoPosition() *rawdata.EnhancedPosition {
+	pos := rawdata.PositionBlock{
+		Latitude:    39.897088,
+		Longitude:   -105.115120,
+		Altitude:    120.5,
+		VelocityN:   0.12,
+		VelocityE:   -0.05,
+		VelocityU:   0.01,
+		ClockOffset: 0.0001,
+		ClockDrift:  1e-9,
+		HDOP:        0.9,
+		VDOP:        1.2,
+		TDOP:        1.5,
+		SigmaN:      0.008,
+		SigmaE:      0.009,
+		SigmaU:      0.015,
+		RMS:         0.012,
+		UnitStdDev:  0.010,
+	}
 	return &rawdata.EnhancedPosition{
 		Header: rawdata.PositionHeader{
 			WeekNumber:       2200,
 			ReceiverTimeSec:  float64(time.Now().Unix() % 86400),
-			NumberSVsUsed:    8,
-			NumberSVsTracked: 12,
+			NumberSVsUsed:    4,
+			NumberSVsTracked: 5,
 			AugmentationType: gnss.PosAugmentRTKFixed,
 		},
-		Position: rawdata.PositionBlock{
-			Latitude:  39.897088,
-			Longitude: -105.115120,
-			Altitude:  120.5,
-			HDOP:      0.9,
-			RMS:       0.012,
+		Position: pos,
+		RTK: &rawdata.RTKBlock{
+			Mode:  1,
+			Age:   1.25,
+			Flags: 0,
+		},
+		SVs: []rawdata.SVEntry{
+			{SVID: 7, SVType: gnss.SystemGPS, Flag: (1 << 1) | (1 << 2)}, // used + RAIM fault
+			{SVID: 133, SVType: gnss.SystemSBAS, Flag: 1 << 1},
+			{SVID: 11, SVType: gnss.SystemGalileo, Flag: 1 << 1},
+			{SVID: 19, SVType: gnss.SystemBeidou, Flag: 1 << 1},
+			{SVID: 12, SVType: gnss.SystemGLONASS, Flag: 0},
 		},
 	}
 }
