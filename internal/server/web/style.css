@@ -14,6 +14,7 @@
   --slip-now-ring: #f85149;
   --slip-60-ring: #d29922;
   --slip-300-ring: #8b6914;
+  --single-ant-ring: #f0883e;
 }
 
 * { box-sizing: border-box; }
@@ -298,6 +299,91 @@ canvas#sky {
 .slip-key.slip-now { background: var(--slip-now-bg); }
 .slip-key.slip-60 { background: var(--slip-60-bg); }
 .slip-key.slip-300 { background: var(--slip-300-bg); }
+
+.slip-mask-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 0 0 auto;
+}
+
+.slip-mask-label {
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.slip-mask-field input {
+  width: 3.5rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.slip-mask-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.single-ant-key {
+  max-width: 420px;
+  border-style: dashed;
+  border-color: var(--single-ant-ring);
+}
+
+.antenna-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem 0.6rem;
+  width: 100%;
+  max-width: 420px;
+}
+
+.antenna-filter[hidden] {
+  display: none !important;
+}
+
+.antenna-filter-label {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.antenna-filter-btns {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.antenna-filter-btn {
+  padding: 0.22rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.antenna-filter-btn:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.antenna-filter-btn.active {
+  border-color: var(--accent);
+  background: rgba(88, 166, 255, 0.15);
+  color: var(--accent);
+}
 
 .used-filter-btn {
   max-width: 420px;

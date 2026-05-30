@@ -81,17 +81,20 @@ func (s *Store) ApplyRAW(msg rawdata.Message) model.Snapshot {
 }
 
 func rt27View(m *rawdata.RT27Survey) *model.RT27View {
+	antNums := rt27AntennaNums(m.Measurements)
 	v := &model.RT27View{
-		Week:     m.Header.WeekNumber,
-		TimeSec:  float64(m.Header.ReceiverTimeMS) / 1000,
-		NumSVs:   m.Header.NumberSVs,
-		Antennas: rt27Antennas(m.Measurements),
+		Week:         m.Header.WeekNumber,
+		TimeSec:      float64(m.Header.ReceiverTimeMS) / 1000,
+		NumSVs:       m.Header.NumberSVs,
+		Antennas:     formatAntennaList(antNums),
+		AntennaCount: len(antNums),
 	}
 	for _, meas := range m.Measurements {
 		row := model.SVRowView{
 			System:     meas.SVType,
 			SystemName: model.SystemName(meas.SVType),
 			SVID:       meas.SVID,
+			Antenna:    meas.AntennaNumber,
 			Azimuth:    normalizeAzimuth(meas.Azimuth),
 			Elevation:  meas.Elevation,
 		}
@@ -175,9 +178,9 @@ func signalOrder(system byte, sig model.SignalView) int {
 	return int(sig.TrackType)
 }
 
-func rt27Antennas(measurements []rawdata.Measurement) string {
+func rt27AntennaNums(measurements []rawdata.Measurement) []byte {
 	if len(measurements) == 0 {
-		return ""
+		return nil
 	}
 	seen := make(map[byte]bool)
 	var nums []byte
@@ -195,11 +198,22 @@ func rt27Antennas(measurements []rawdata.Measurement) string {
 			}
 		}
 	}
+	return nums
+}
+
+func formatAntennaList(nums []byte) string {
+	if len(nums) == 0 {
+		return ""
+	}
 	out := make([]string, len(nums))
 	for i, n := range nums {
 		out[i] = strconv.Itoa(int(n))
 	}
 	return strings.Join(out, ",")
+}
+
+func rt27Antennas(measurements []rawdata.Measurement) string {
+	return formatAntennaList(rt27AntennaNums(measurements))
 }
 
 func normalizeAzimuth(az int16) int16 {

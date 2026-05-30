@@ -24,6 +24,7 @@ type SVRowView struct {
 	System           byte     `json:"system"`
 	SystemName       string   `json:"systemName"`
 	SVID             byte     `json:"svid"`
+	Antenna          byte     `json:"antenna"`
 	Azimuth          int16    `json:"azimuth"`
 	Elevation        byte     `json:"elevation"`
 	UsedInSolution   bool     `json:"usedInSolution,omitempty"`

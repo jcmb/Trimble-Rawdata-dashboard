@@ -15,7 +15,10 @@ const connectErrorEl = document.getElementById('connect-error');
 const skyLegendEl = document.getElementById('sky-legend');
 const tableFilterEl = document.getElementById('table-filter');
 const showSlipCountsEl = document.getElementById('show-slip-counts');
+const slipMaskEl = document.getElementById('slip-mask');
 const filterUsedEl = document.getElementById('filter-used');
+const antennaFilterEl = document.getElementById('antenna-filter');
+const singleAntLegendEl = document.getElementById('single-ant-legend');
 
 const BAND_LABELS = { l1: 'L1', l2: 'L2', l5: 'L5', l6: 'L6' };
 
@@ -52,6 +55,11 @@ const OTHER_LEGEND = {
 const ARROW_UP = '\u25B2';
 const ARROW_DOWN = '\u25BC';
 
+const SLIP_MASK_KEY = 'slipMaskEl';
+const ANTENNA_FILTER_KEY = 'filterAntenna';
+
+const SINGLE_ANT_RING = '#f0883e';
+
 let allRows = [];
 let sortCol = 'sv';
 let sortDir = 1;
@@ -60,9 +68,33 @@ const filterSystemModes = new Map();
 /** @type {null | 'used' | 'unused'} */
 let filterUsedMode = null;
 let hasPositionSVData = false;
+let dualAntenna = false;
+/** @type {'both' | '0' | '1'} */
+let filterAntennaMode = localStorage.getItem(ANTENNA_FILTER_KEY) || 'both';
 let serverConfig = { hosted: false, allowLocalHosts: false };
 let lastEpochSec = null;
 let showSlipCounts = localStorage.getItem('showSlipCounts') === '1';
+
+function clampSlipMask(value) {
+  const n = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(90, Math.max(0, n));
+}
+
+function loadSlipMask() {
+  return clampSlipMask(localStorage.getItem(SLIP_MASK_KEY) ?? 0);
+}
+
+let slipMask = loadSlipMask();
+
+function slipIndicated(row) {
+  return (row?.elevation ?? 0) >= slipMask;
+}
+
+function displaySlipLevel(level, row) {
+  if (!slipIndicated(row)) return 'none';
+  return level && level !== 'none' ? level : 'none';
+}
 
 function applyConnectionFields(host, port) {
   if (host) connectHostEl.value = host;
@@ -105,8 +137,12 @@ function epochSec(week, timeSec) {
   return week * 604800 + timeSec;
 }
 
+function svIdentity(row) {
+  return `${row.system}:${row.svid}`;
+}
+
 function svKey(row) {
-  return `${row.system}-${row.svid}`;
+  return `${row.system}-${row.svid}-${row.antenna ?? 0}`;
 }
 
 function sigKey(row, sig) {
@@ -193,15 +229,17 @@ function enrichSlipState(rt27, rows) {
   }
 }
 
-function signalHoverDetail(sig) {
+function signalHoverDetail(sig, row) {
   const parts = [
     sig.trackName || 'signal',
     `SNR ${sig.snr.toFixed(1)} dB-Hz`,
   ];
-  if (sig._slipLevel && sig._slipLevel !== 'none') {
+  if (slipIndicated(row) && sig._slipLevel && sig._slipLevel !== 'none') {
     parts.push(`cycle slip ${slipLevelLabel(sig._slipLevel)}`);
   }
-  parts.push(`slip count ${sig._slipCount ?? 0}`);
+  if (slipIndicated(row)) {
+    parts.push(`slip count ${sig._slipCount ?? 0}`);
+  }
   if (sig.cycleSlipCount != null && sig.cycleSlipCount > 0) {
     parts.push(`RX counter ${sig.cycleSlipCount}`);
   }
@@ -209,10 +247,10 @@ function signalHoverDetail(sig) {
   return parts.join(' · ');
 }
 
-function bandHoverText(band, col) {
+function bandHoverText(band, col, row) {
   const label = BAND_LABELS[col] || col.toUpperCase();
   if (!band?.signals?.length) return `${label}: no data`;
-  return `${label}: ${band.signals.map(signalHoverDetail).join(' · ')}`;
+  return `${label}: ${band.signals.map(sig => signalHoverDetail(sig, row)).join(' · ')}`;
 }
 
 function escapeAttr(s) {
@@ -269,15 +307,78 @@ function rowMatchesSystemFilter(row) {
   return true;
 }
 
+function rowMatchesAntennaFilter(row) {
+  if (!dualAntenna || filterAntennaMode === 'both') return true;
+  return String(row.antenna ?? 0) === filterAntennaMode;
+}
+
 function rowMatchesFilter(row) {
   if (!rowMatchesSystemFilter(row)) return false;
+  if (!rowMatchesAntennaFilter(row)) return false;
   if (filterUsedMode === 'used' && !row.usedInSolution) return false;
   if (filterUsedMode === 'unused' && row.usedInSolution) return false;
   return true;
 }
 
 function hasActiveFilters() {
-  return filterSystemModes.size > 0 || filterUsedMode != null;
+  const antennaFiltered = dualAntenna && filterAntennaMode !== 'both';
+  return filterSystemModes.size > 0 || filterUsedMode != null || antennaFiltered;
+}
+
+function buildAntennaPresence(rows) {
+  const map = new Map();
+  for (const row of rows) {
+    const k = svIdentity(row);
+    if (!map.has(k)) map.set(k, new Set());
+    map.get(k).add(row.antenna ?? 0);
+  }
+  return map;
+}
+
+function skyDisplayRows(rows) {
+  if (!dualAntenna || filterAntennaMode !== 'both') return rows;
+  const presence = buildAntennaPresence(allRows);
+  const seen = new Map();
+  for (const row of rows) {
+    const k = svIdentity(row);
+    const ants = presence.get(k);
+    if (!seen.has(k)) {
+      seen.set(k, row);
+      row._singleAntennaOnly = ants != null && ants.size === 1;
+      row._trackedAntennas = ants ? [...ants].sort((a, b) => a - b) : [row.antenna ?? 0];
+    } else {
+      const existing = seen.get(k);
+      existing._slipLevel = maxSlipLevel(existing._slipLevel || 'none', row._slipLevel || 'none');
+    }
+  }
+  return [...seen.values()];
+}
+
+function updateDualAntennaUI() {
+  if (antennaFilterEl) antennaFilterEl.hidden = !dualAntenna;
+  if (singleAntLegendEl) singleAntLegendEl.hidden = !dualAntenna || filterAntennaMode !== 'both';
+  if (antennaFilterEl) {
+    antennaFilterEl.querySelectorAll('.antenna-filter-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.ant === filterAntennaMode);
+    });
+  }
+  updateAntennaColumnVisibility();
+  document.querySelectorAll('.antenna-detail').forEach(el => {
+    el.hidden = dualAntenna;
+  });
+}
+
+function updateAntennaColumnVisibility() {
+  snrTable.querySelectorAll('[data-col="antenna"]').forEach(el => {
+    el.classList.toggle('col-empty', !dualAntenna);
+  });
+}
+
+function setAntennaFilter(mode) {
+  filterAntennaMode = mode;
+  localStorage.setItem(ANTENNA_FILTER_KEY, mode);
+  updateDualAntennaUI();
+  refreshDataView();
 }
 
 function visibleRows() {
@@ -322,6 +423,10 @@ function toggleUsedFilter() {
 function clearAllFilters() {
   filterSystemModes.clear();
   filterUsedMode = null;
+  if (dualAntenna) {
+    filterAntennaMode = 'both';
+    localStorage.setItem(ANTENNA_FILTER_KEY, 'both');
+  }
   updateLegendUI();
   refreshDataView();
 }
@@ -379,6 +484,9 @@ function updateLegendUI() {
   }
   if (filterUsedMode === 'used') filters.push('Used in position');
   if (filterUsedMode === 'unused') filters.push('Not used in position');
+  if (dualAntenna && filterAntennaMode !== 'both') {
+    filters.push(`Antenna ${filterAntennaMode}`);
+  }
 
   if (filters.length) {
     const n = visibleRows().length;
@@ -456,7 +564,9 @@ function drawSky(rows) {
 
   if (!rows?.length) return;
 
-  for (const row of rows) {
+  const plotRows = skyDisplayRows(rows);
+
+  for (const row of plotRows) {
     const el = row.elevation ?? 0;
     const az = positiveAz(row.azimuth ?? 0);
     const rr = r * (1 - el / 90);
@@ -464,7 +574,7 @@ function drawSky(rows) {
     const x = cx + rr * Math.cos(a);
     const y = cy + rr * Math.sin(a);
     const color = systemColor(row.systemName, row.system);
-    const slipLevel = row._slipLevel || 'none';
+    const slipLevel = displaySlipLevel(row._slipLevel, row);
 
     if (slipLevel !== 'none') {
       ctx.beginPath();
@@ -472,6 +582,16 @@ function drawSky(rows) {
       ctx.strokeStyle = SLIP_RING[slipLevel];
       ctx.lineWidth = slipLevel === 'now' ? 3 : 2;
       ctx.stroke();
+    }
+
+    if (row._singleAntennaOnly) {
+      ctx.beginPath();
+      ctx.arc(x, y, 13, 0, Math.PI * 2);
+      ctx.strokeStyle = SINGLE_ANT_RING;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
 
     if (hasPositionSVData && row.usedInSolution) {
@@ -514,6 +634,10 @@ function fmtAge(pos) {
 
 function svHoverDetail(row) {
   const parts = [`${row.systemName} PRN ${row.svid}`];
+  if (dualAntenna) parts.push(`antenna ${row.antenna ?? 0}`);
+  if (row._singleAntennaOnly && row._trackedAntennas?.length) {
+    parts.push(`one antenna only (ant ${row._trackedAntennas[0]})`);
+  }
   if (row.usedInSolution) parts.push('used in position');
   else parts.push('not used in position');
   if (row.raimFault) parts.push('RAIM fault');
@@ -576,7 +700,9 @@ function updatePosition(pos, rt27) {
     set('clock-offset', fmtM(pos.clockOffset, 6, 's'));
     set('clock-drift', fmtM(pos.clockDrift, 3, 's/s'));
   }
-  set('antenna', rt27?.antennas || '—');
+  if (!dualAntenna) {
+    set('antenna', rt27?.antennas || '—');
+  }
 }
 
 function horizontalSigma(sigmaN, sigmaE) {
@@ -595,7 +721,9 @@ function compareRows(a, b, col) {
     case 'system':
       return a.systemName.localeCompare(b.systemName) || a.svid - b.svid;
     case 'sv':
-      return a.svid - b.svid || a.system - b.system;
+      return a.svid - b.svid || (a.antenna ?? 0) - (b.antenna ?? 0) || a.system - b.system;
+    case 'antenna':
+      return (a.antenna ?? 0) - (b.antenna ?? 0) || a.system - b.system || a.svid - b.svid;
     case 'used': {
       const au = a.usedInSolution ? 1 : 0;
       const bu = b.usedInSolution ? 1 : 0;
@@ -633,17 +761,18 @@ function updateSortHeaders() {
   });
 }
 
-function fmtBandCell(band, col) {
-  const slipCls = slipCellClass(band?._slipLevel);
+function fmtBandCell(band, col, row) {
+  const slipLevel = displaySlipLevel(band?._slipLevel, row);
+  const slipCls = slipCellClass(slipLevel);
   const cls = `band col-${col}${slipCls}`;
-  const title = bandHoverText(band, col);
+  const title = bandHoverText(band, col, row);
   if (!band?.present || !band.signals?.length) {
     return fmtTd(col, `${cls} empty`, '—', title);
   }
   const snrs = band.signals.map(s => s.snr.toFixed(1)).join('/');
   const tracks = band.signals.map(s => escapeHtml(s.trackName || '')).join('/');
   let slipLine = '';
-  if (showSlipCounts) {
+  if (showSlipCounts && slipIndicated(row)) {
     const counts = band.signals.map(s => String(s._slipCount ?? 0)).join('/');
     slipLine = `<span class="slip-val">${counts}</span>`;
   }
@@ -651,10 +780,16 @@ function fmtBandCell(band, col) {
   return fmtTd(col, cls, body, title);
 }
 
+function fmtAntennaCell(row) {
+  const ant = row.antenna ?? 0;
+  return fmtTd('antenna', 'col-antenna', String(ant), `Antenna ${ant}`);
+}
+
 function updateSNRTable(rows) {
   snrBody.innerHTML = '';
   updateSortHeaders();
   updateEmptyColumns(rows);
+  updateAntennaColumnVisibility();
   if (!rows.length) return;
 
   for (const row of sortedRows(rows)) {
@@ -663,13 +798,14 @@ function updateSNRTable(rows) {
     tr.innerHTML = `
       ${fmtTd('system', 'col-system', escapeHtml(row.systemName), `${row.systemName} · system ${row.system}`)}
       ${fmtSVCell(row)}
+      ${fmtAntennaCell(row)}
       ${fmtUsedCell(row)}
       ${fmtTd('elevation', 'col-elevation', String(row.elevation), `Elevation ${row.elevation}°`)}
       ${fmtTd('azimuth', 'col-azimuth', String(positiveAz(row.azimuth)), `Azimuth ${positiveAz(row.azimuth)}°`)}
-      ${fmtBandCell(row.l1, 'l1')}
-      ${fmtBandCell(row.l2, 'l2')}
-      ${fmtBandCell(row.l5, 'l5')}
-      ${fmtBandCell(row.l6, 'l6')}`;
+      ${fmtBandCell(row.l1, 'l1', row)}
+      ${fmtBandCell(row.l2, 'l2', row)}
+      ${fmtBandCell(row.l5, 'l5', row)}
+      ${fmtBandCell(row.l6, 'l6', row)}`;
     snrBody.appendChild(tr);
   }
   updateEmptyColumns(rows);
@@ -680,6 +816,7 @@ function refreshDataView() {
   drawSky(rows);
   updateSNRTable(rows);
   updateLegendUI();
+  updateDualAntennaUI();
 }
 
 function escapeHtml(s) {
@@ -698,6 +835,8 @@ function applySnapshot(snap) {
 
   if (snap.rt27) {
     allRows = snap.rt27.svs || [];
+    dualAntenna = (snap.rt27.antennaCount ?? 0) >= 2;
+    if (!dualAntenna) filterAntennaMode = 'both';
     enrichSlipState(snap.rt27, allRows);
     const t = snap.rt27.timeSec.toFixed(3);
     const total = allRows.length;
@@ -848,6 +987,25 @@ if (showSlipCountsEl) {
     showSlipCounts = showSlipCountsEl.checked;
     localStorage.setItem('showSlipCounts', showSlipCounts ? '1' : '0');
     updateSNRTable(visibleRows());
+  });
+}
+
+if (slipMaskEl) {
+  slipMaskEl.value = String(slipMask);
+  const applySlipMask = () => {
+    slipMask = clampSlipMask(slipMaskEl.value);
+    slipMaskEl.value = String(slipMask);
+    localStorage.setItem(SLIP_MASK_KEY, String(slipMask));
+    refreshDataView();
+  };
+  slipMaskEl.addEventListener('change', applySlipMask);
+  slipMaskEl.addEventListener('input', applySlipMask);
+}
+
+if (antennaFilterEl) {
+  if (!['both', '0', '1'].includes(filterAntennaMode)) filterAntennaMode = 'both';
+  antennaFilterEl.querySelectorAll('.antenna-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => setAntennaFilter(btn.dataset.ant));
   });
 }
 

@@ -49,9 +49,10 @@ type PositionView struct {
 type RT27View struct {
 	Week     uint16      `json:"week"`
 	TimeSec  float64     `json:"timeSec"`
-	NumSVs   byte        `json:"numSVs"`
-	Antennas string      `json:"antennas,omitempty"`
-	SVs      []SVRowView `json:"svs"`
+	NumSVs       byte        `json:"numSVs"`
+	Antennas     string      `json:"antennas,omitempty"`
+	AntennaCount int         `json:"antennaCount,omitempty"`
+	SVs          []SVRowView `json:"svs"`
 }
 
 // Event is pushed over SSE when state changes.

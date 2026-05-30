@@ -138,7 +138,7 @@ func demoRT27(baseAz int) *rawdata.RT27Survey {
 		Header: rawdata.EpochHeader{
 			WeekNumber:     2200,
 			ReceiverTimeMS: int32(time.Now().UnixMilli() % 604800000),
-			NumberSVs:      6,
+			NumberSVs:      7,
 		},
 	}
 	cases := []struct {
@@ -214,6 +214,17 @@ func demoRT27(baseAz int) *rawdata.RT27Survey {
 			Blocks:        blocks,
 		})
 	}
+	// Dual-antenna demo: GPS 7 tracked on both antennas; OmniSTAR on antenna 0 only.
+	gps7 := rt.Measurements[0]
+	rt.Measurements = append(rt.Measurements, rawdata.Measurement{
+		SVID:          gps7.SVID,
+		SVType:        gps7.SVType,
+		AntennaNumber: 1,
+		Elevation:     gps7.Elevation,
+		Azimuth:       gps7.Azimuth,
+		Blocks:        gps7.Blocks,
+	})
+	rt.Header.NumberSVs = byte(len(rt.Measurements))
 	return rt
 }
 

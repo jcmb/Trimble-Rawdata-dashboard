@@ -40,11 +40,24 @@
             <span class="slip-key slip-60">&lt; 60 s</span>
             <span class="slip-key slip-300">&lt; 300 s</span>
           </div>
+          <label class="slip-mask-field" title="Hide cycle slip indicators for SVs below this elevation">
+            <span class="slip-mask-label">Slip mask El°</span>
+            <input id="slip-mask" type="number" min="0" max="90" step="1" value="0">
+          </label>
+        </div>
+        <div id="antenna-filter" class="antenna-filter" hidden>
+          <span class="antenna-filter-label">Antenna</span>
+          <div class="antenna-filter-btns">
+            <button type="button" class="antenna-filter-btn active" data-ant="both">Both</button>
+            <button type="button" class="antenna-filter-btn" data-ant="0">0</button>
+            <button type="button" class="antenna-filter-btn" data-ant="1">1</button>
+          </div>
         </div>
         <button type="button" id="filter-used" class="legend-item used-filter-btn" title="Click: used only · not used · show all">
           <span class="legend-swatch used-swatch" aria-hidden="true"></span>
           <span class="used-filter-label">Used in position</span>
         </button>
+        <span id="single-ant-legend" class="slip-key single-ant-key" hidden title="Dashed ring: SV tracked on one antenna only (both antennas is normal)">One antenna</span>
       </div>
       <p id="epoch" class="meta">—</p>
     </section>
@@ -64,7 +77,7 @@
       <details class="pos-details">
         <summary>Details</summary>
         <dl class="pos-details-grid">
-          <dt>Antenna</dt><dd id="antenna">—</dd>
+          <dt class="antenna-detail">Antenna</dt><dd id="antenna" class="antenna-detail">—</dd>
           <dt>Velocity N</dt><dd id="vel-n">—</dd>
           <dt>Velocity E</dt><dd id="vel-e">—</dd>
           <dt>Velocity U</dt><dd id="vel-u">—</dd>
@@ -97,6 +110,7 @@
           <tr>
             <th data-sort="system" data-col="system" class="sortable col-system">GNSS system</th>
             <th data-sort="sv" data-col="sv" class="sortable sorted-asc col-sv">SV</th>
+            <th data-sort="antenna" data-col="antenna" class="sortable col-antenna">Ant</th>
             <th data-sort="used" data-col="used" class="sortable col-used">Used</th>
             <th data-sort="elevation" data-col="elevation" class="sortable col-elevation">El°</th>
             <th data-sort="azimuth" data-col="azimuth" class="sortable col-azimuth">Az°</th>

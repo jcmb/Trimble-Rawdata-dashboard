@@ -3,7 +3,7 @@ package version
 import "time"
 
 // Number is the semantic dashboard version (bump on releases).
-var Number = "1.1"
+var Number = "1.90"
 
 // Build is set via -ldflags; otherwise stamped at process start for cache busting.
 var Build string
@@ -14,7 +14,7 @@ func init() {
 	}
 }
 
-// String returns the full version label (e.g. 1.1+20260530.190625).
+// String returns the full version label (e.g. 1.90+20260530.190625).
 func String() string {
 	return Number + "+" + Build
 }
