@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Cross-compile all release targets before each commit. Skip with SKIP_BUILD=1.
+set -euo pipefail
+
+if [[ "${SKIP_BUILD:-}" == "1" ]]; then
+  echo "pre-commit: SKIP_BUILD=1 — skipping cross-compile"
+  exit 0
+fi
+
+ROOT="$(git rev-parse --show-toplevel)"
+echo "pre-commit: cross-compiling all platforms…"
+exec "$ROOT/scripts/build.sh"

@@ -43,9 +43,7 @@ func BandSlot(system, blockType, trackType byte) int {
 		case FreqL2:
 			return BandL2
 		default:
-			if blockType == FreqG3 {
-				return BandL6
-			}
+			// G3 and any other GLONASS third-band signals (pydcollib GetSNRs → Signals[2] / L5).
 			return BandL5
 		}
 	case SystemGalileo:
@@ -74,6 +72,14 @@ func BandSlot(system, blockType, trackType byte) int {
 		case FreqL1, FreqS1:
 			return BandL1
 		default:
+			return BandL5
+		}
+	case SystemOmniStar, SystemTerralite:
+		switch blockType {
+		case FreqL1, FreqS1:
+			return BandL1
+		default:
+			// Terralite XPS and any other MSS third-band signals → L5 (pydcollib GetSNRs).
 			return BandL5
 		}
 	default:

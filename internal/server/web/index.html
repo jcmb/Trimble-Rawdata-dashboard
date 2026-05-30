@@ -10,8 +10,21 @@
 <body>
   <header>
     <h1>Trimble RAWDATA Dashboard</h1>
+    <form id="connect-form" class="connect-form" hidden>
+      <label class="connect-field">
+        <span class="connect-label">Host</span>
+        <input id="connect-host" type="text" inputmode="url" autocomplete="off" value="sps855.com" required>
+      </label>
+      <label class="connect-field connect-field-port">
+        <span class="connect-label">Port</span>
+        <input id="connect-port" type="number" min="1" max="65535" value="28005" required>
+      </label>
+      <button type="submit" class="connect-btn">Connect</button>
+      <button type="button" id="connect-disconnect" class="connect-btn secondary">Disconnect</button>
+      <span id="connect-error" class="connect-error" hidden></span>
+    </form>
     <div id="status" class="status disconnected">Disconnected</div>
-    <span id="version" class="version">v__VERSION__</span>
+    <span id="version" class="version" title="v__VERSION_FULL__">v__VERSION_NUMBER__</span>
   </header>
 
   <main>
@@ -37,21 +50,21 @@
     </section>
 
     <section class="panel pos-panel">
-      <h2>Enhanced position</h2>
+      <h2>Position</h2>
       <dl id="position" class="pos-main">
         <dt>Latitude</dt><dd id="lat">—</dd>
         <dt>Longitude</dt><dd id="lon">—</dd>
         <dt>Altitude</dt><dd id="alt">—</dd>
-        <dt>σ U</dt><dd id="sigma-u">—</dd>
         <dt>σ Horizontal</dt><dd id="sigma-h">—</dd>
+        <dt>σ U</dt><dd id="sigma-u">—</dd>
         <dt>Age of data</dt><dd id="data-age">—</dd>
         <dt>SVs used / tracked</dt><dd id="svs">—</dd>
-        <dt>Antenna</dt><dd id="antenna">—</dd>
         <dt>Augmentation</dt><dd id="aug">—</dd>
       </dl>
       <details class="pos-details">
         <summary>Details</summary>
         <dl class="pos-details-grid">
+          <dt>Antenna</dt><dd id="antenna">—</dd>
           <dt>Velocity N</dt><dd id="vel-n">—</dd>
           <dt>Velocity E</dt><dd id="vel-e">—</dd>
           <dt>Velocity U</dt><dd id="vel-u">—</dd>
@@ -71,7 +84,7 @@
 
     <section class="panel table-panel">
       <div class="table-toolbar">
-        <h2>SNR (RT27)</h2>
+        <h2>Tracking information</h2>
         <label class="table-option">
           <input type="checkbox" id="show-slip-counts">
           Show slip counts in cells

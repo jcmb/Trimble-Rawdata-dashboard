@@ -138,7 +138,7 @@ func demoRT27(baseAz int) *rawdata.RT27Survey {
 		Header: rawdata.EpochHeader{
 			WeekNumber:     2200,
 			ReceiverTimeMS: int32(time.Now().UnixMilli() % 604800000),
-			NumberSVs:      5,
+			NumberSVs:      6,
 		},
 	}
 	cases := []struct {
@@ -184,6 +184,12 @@ func demoRT27(baseAz int) *rawdata.RT27Survey {
 				{BlockNum: 0, BlockType: 0, TrackType: 0, SNR: 39},
 				{BlockNum: 1, BlockType: 1, TrackType: 1, SNR: 37},
 				{BlockNum: 2, BlockType: 1, TrackType: 0, SNR: 35},
+			},
+		},
+		{
+			sys: gnss.SystemOmniStar, svid: 1,
+			blocks: []rawdata.MeasBlock{
+				{BlockNum: 0, BlockType: 0, TrackType: 0, SNR: 46},
 			},
 		},
 	}
@@ -235,7 +241,7 @@ func demoPosition() *rawdata.EnhancedPosition {
 			WeekNumber:       2200,
 			ReceiverTimeSec:  float64(time.Now().Unix() % 86400),
 			NumberSVsUsed:    4,
-			NumberSVsTracked: 5,
+			NumberSVsTracked: 6,
 			AugmentationType: gnss.PosAugmentRTKFixed,
 		},
 		Position: pos,
@@ -250,6 +256,7 @@ func demoPosition() *rawdata.EnhancedPosition {
 			{SVID: 11, SVType: gnss.SystemGalileo, Flag: 1 << 1},
 			{SVID: 19, SVType: gnss.SystemBeidou, Flag: 1 << 1},
 			{SVID: 12, SVType: gnss.SystemGLONASS, Flag: 0},
+			{SVID: 1, SVType: gnss.SystemOmniStar, Flag: 1 << 1},
 		},
 	}
 }

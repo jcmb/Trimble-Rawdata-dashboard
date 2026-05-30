@@ -9,13 +9,17 @@ Uses [geoffrey-kirk-go-dcol](https://github.com/gkirk/geoffrey-kirk-go-dcol) (or
 ## Quick start
 
 ```bash
-# UI only, synthetic data (no receiver)
+# Hosted UI — user connects from the browser (public hosts only by default)
+go run ./cmd/trimble-rawdata-dashboard
+
+# Allow web UI connections to localhost / private IPs (e.g. tcp://192.168.1.10:5017)
+go run ./cmd/trimble-rawdata-dashboard -allow-local-hosts
+
+# UI only, synthetic data at startup (no connect form)
 go run ./cmd/trimble-rawdata-dashboard -demo
 
-# Public test stream (TCP DCOL)
+# Fixed receiver at startup (CLI — not restricted by -allow-local-hosts)
 go run ./cmd/trimble-rawdata-dashboard -port 'tcp://sps855.com:28005' -verbose info
-
-# Local receiver
 go run ./cmd/trimble-rawdata-dashboard -port 'serial:///dev/ttyACM0?baud=115200'
 go run ./cmd/trimble-rawdata-dashboard -port 'tcp://192.168.1.10:5017'
 
@@ -38,6 +42,39 @@ The UI needs **DCOL 0x57 RAWDATA** record subtypes **6** (RT27 survey) and **7**
 
 ## Build
 
+Cross-compile for Windows, macOS (ARM64), and Linux (32- and 64-bit):
+
+```bash
+chmod +x scripts/build.sh   # once
+./scripts/build.sh
+```
+
+Binaries are written to `dist/`:
+
+| File | Platform |
+|------|----------|
+| `trimble-rawdata-dashboard-windows-amd64.exe` | Windows 64-bit |
+| `trimble-rawdata-dashboard-darwin-arm64` | macOS Apple Silicon |
+| `trimble-rawdata-dashboard-linux-amd64` | Linux 64-bit |
+| `trimble-rawdata-dashboard-linux-386` | Linux 32-bit |
+
+Override output directory: `OUT_DIR=/tmp/out ./scripts/build.sh`
+
+### Build on every commit (local)
+
+Install the pre-commit hook once after cloning:
+
+```bash
+chmod +x scripts/install-hooks.sh scripts/build.sh
+./scripts/install-hooks.sh
+```
+
+Each commit then cross-compiles all four targets into `dist/` (gitignored). The commit is blocked if any build fails.
+
+Skip for a single commit: `SKIP_BUILD=1 git commit …`
+
+Local build for the current machine:
+
 ```bash
 go build -o trimble-rawdata-dashboard ./cmd/trimble-rawdata-dashboard
 ```
@@ -57,6 +94,10 @@ Receiver (serial/tcp)
 ```
 
 - **GET /** — static UI (embedded)
+- **GET /api/config** — hosted mode and connection policy
+- **POST /api/connect** — `{ "host", "port" }` or `{ "uri": "tcp://…" }` (hosted mode)
+- **POST /api/disconnect** — stop ingest (hosted mode)
+- **POST /api/demo** — synthetic data (hosted mode)
 - **GET /api/snapshot** — current JSON state
 - **GET /api/events** — Server-Sent Events stream
 

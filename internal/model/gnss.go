@@ -31,10 +31,8 @@ func SystemName(sys byte) string {
 		return "QZSS"
 	case SystemBeidouOld, SystemBeidou, SystemBeidouB1Geo:
 		return "Beidou"
-	case SystemOmniStar:
-		return "OmniSTAR"
-	case SystemTerralite:
-		return "Terralite"
+	case SystemOmniStar, SystemTerralite:
+		return "MSS"
 	case SystemIRNSS:
 		return "IRNSS"
 	default:

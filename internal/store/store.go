@@ -49,6 +49,13 @@ func (s *Store) SetError(err string) model.Snapshot {
 	return s.snap
 }
 
+func (s *Store) SetPort(port string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.snap.Port = port
+	s.snap.UpdatedAt = time.Now()
+}
+
 func (s *Store) IncPacket() {
 	s.mu.Lock()
 	s.snap.PacketCount++

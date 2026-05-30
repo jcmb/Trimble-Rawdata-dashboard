@@ -7,12 +7,22 @@ const snrTable = document.getElementById('snr-table');
 const countsEl = document.getElementById('counts');
 const portEl = document.getElementById('port');
 const errorEl = document.getElementById('error');
+const connectFormEl = document.getElementById('connect-form');
+const connectHostEl = document.getElementById('connect-host');
+const connectPortEl = document.getElementById('connect-port');
+const connectDisconnectEl = document.getElementById('connect-disconnect');
+const connectErrorEl = document.getElementById('connect-error');
 const skyLegendEl = document.getElementById('sky-legend');
 const tableFilterEl = document.getElementById('table-filter');
 const showSlipCountsEl = document.getElementById('show-slip-counts');
 const filterUsedEl = document.getElementById('filter-used');
 
 const BAND_LABELS = { l1: 'L1', l2: 'L2', l5: 'L5', l6: 'L6' };
+
+const DEFAULT_CONNECT_HOST = 'sps855.com';
+const DEFAULT_CONNECT_PORT = '28005';
+const CONNECT_HOST_KEY = 'connectHost';
+const CONNECT_PORT_KEY = 'connectPort';
 
 /** Band columns — auto-hidden when empty across visible rows. */
 const BAND_COLS = ['l1', 'l2', 'l5', 'l6'];
@@ -28,7 +38,7 @@ const SKY_LEGEND = [
   { key: 'GLONASS', label: 'GLONASS', color: '#ef4444', description: 'Russian GLONASS constellation.', match: ['GLONASS'] },
   { key: 'Galileo', label: 'Galileo', color: '#a16207', description: 'European Galileo GNSS.', match: ['Galileo'] },
   { key: 'Beidou', label: 'BeiDou', color: '#9333ea', description: 'Chinese BeiDou Navigation Satellite System (BDS).', match: ['Beidou'] },
-  { key: 'MSS', label: 'MSS', color: '#0ea5e9', description: 'Mobile Satellite Service (OmniSTAR, Terralite).', match: ['OmniSTAR', 'Terralite'] },
+  { key: 'MSS', label: 'MSS', color: '#0ea5e9', description: 'Mobile Satellite Service (OmniSTAR, Terralite).', match: ['MSS'] },
 ];
 
 const OTHER_LEGEND = {
@@ -50,8 +60,33 @@ const filterSystemModes = new Map();
 /** @type {null | 'used' | 'unused'} */
 let filterUsedMode = null;
 let hasPositionSVData = false;
+let serverConfig = { hosted: false, allowLocalHosts: false };
 let lastEpochSec = null;
 let showSlipCounts = localStorage.getItem('showSlipCounts') === '1';
+
+function applyConnectionFields(host, port) {
+  if (host) connectHostEl.value = host;
+  if (port != null && port !== '') connectPortEl.value = String(port);
+}
+
+function persistConnectionDraft(host, port) {
+  const h = (host ?? connectHostEl?.value ?? '').trim();
+  const p = port ?? connectPortEl?.value ?? '';
+  if (h) localStorage.setItem(CONNECT_HOST_KEY, h);
+  if (p !== '') localStorage.setItem(CONNECT_PORT_KEY, String(p));
+}
+
+function restoreConnectionFields(cfg) {
+  const host = cfg?.lastHost || localStorage.getItem(CONNECT_HOST_KEY) || DEFAULT_CONNECT_HOST;
+  const port = cfg?.lastPort || localStorage.getItem(CONNECT_PORT_KEY) || DEFAULT_CONNECT_PORT;
+  applyConnectionFields(host, port);
+  persistConnectionDraft(host, port);
+}
+
+applyConnectionFields(
+  localStorage.getItem(CONNECT_HOST_KEY),
+  localStorage.getItem(CONNECT_PORT_KEY),
+);
 
 /** @type {Map<string, {ignoreNextSlip: boolean}>} */
 const svSlipState = new Map();
@@ -511,8 +546,8 @@ function fmtUsedCell(row) {
 function updatePosition(pos, rt27) {
   const set = (id, val) => { document.getElementById(id).textContent = val; };
   const clearIds = [
-    'lat', 'lon', 'alt', 'sigma-u', 'sigma-h', 'data-age', 'svs', 'aug',
-    'vel-n', 'vel-e', 'vel-u', 'hdop', 'vdop', 'tdop', 'rms',
+    'lat', 'lon', 'alt', 'sigma-h', 'sigma-u', 'data-age', 'svs', 'aug',
+    'antenna', 'vel-n', 'vel-e', 'vel-u', 'hdop', 'vdop', 'tdop', 'rms',
     'sigma-n', 'sigma-e', 'sigma-u-detail', 'unit-std', 'clock-offset', 'clock-drift',
   ];
   if (!pos) {
@@ -521,8 +556,8 @@ function updatePosition(pos, rt27) {
     set('lat', fmtDMS(pos.latitude, true));
     set('lon', fmtDMS(pos.longitude, false));
     set('alt', fmtM(pos.altitude, 2, 'm'));
-    set('sigma-u', fmtSigma(pos.sigmaU));
     set('sigma-h', fmtSigma(pos.sigmaH ?? horizontalSigma(pos.sigmaN, pos.sigmaE)));
+    set('sigma-u', fmtSigma(pos.sigmaU));
     set('data-age', fmtAge(pos));
     set('svs', `${pos.svsUsed} / ${pos.svsTracked}`);
     set('aug', pos.augmentationText || String(pos.augmentation));
@@ -656,7 +691,7 @@ function applySnapshot(snap) {
   statusEl.className = 'status ' + (snap.connected ? 'connected' : 'disconnected');
 
   countsEl.textContent = `packets: ${snap.packetCount} · raw: ${snap.rawCount}`;
-  portEl.textContent = snap.port ? `port: ${snap.port}` : 'demo mode';
+  portEl.textContent = formatPortLine(snap);
   errorEl.textContent = snap.lastError || '';
 
   hasPositionSVData = (snap.position?.svs?.length ?? 0) > 0;
@@ -724,10 +759,88 @@ function connectSSE() {
 
 fetch('/api/snapshot').then(r => r.json()).then(applySnapshot).catch(() => {});
 
+loadServerConfig();
 connectSSE();
 initSkyLegend();
 drawSky([]);
 updateSortHeaders();
+
+function formatPortLine(snap) {
+  if (snap.port) return `port: ${snap.port}`;
+  if (serverConfig.demo) return 'demo mode';
+  if (serverConfig.hosted) return snap.connected ? 'connected' : 'not connected';
+  return '—';
+}
+
+async function refreshServerConfig() {
+  try {
+    serverConfig = await fetch('/api/config').then(r => r.json());
+  } catch (_) { /* ignore */ }
+}
+
+function loadServerConfig() {
+  fetch('/api/config')
+    .then(r => r.json())
+    .then(cfg => {
+      serverConfig = cfg;
+      if (cfg.hosted) {
+        connectFormEl.hidden = false;
+        restoreConnectionFields(cfg);
+        if (!cfg.allowLocalHosts) {
+          connectHostEl.title = 'Local and private addresses are blocked unless the server is started with -allow-local-hosts';
+        }
+      }
+    })
+    .catch(() => {});
+}
+
+function showConnectError(msg) {
+  if (!msg) {
+    connectErrorEl.hidden = true;
+    connectErrorEl.textContent = '';
+    return;
+  }
+  connectErrorEl.hidden = false;
+  connectErrorEl.textContent = msg;
+}
+
+async function postJSON(url, body) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body ?? {}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+connectHostEl?.addEventListener('input', () => persistConnectionDraft());
+connectPortEl?.addEventListener('input', () => persistConnectionDraft());
+
+connectFormEl?.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  showConnectError('');
+  const host = connectHostEl.value.trim();
+  const port = parseInt(connectPortEl.value, 10);
+  persistConnectionDraft(host, port);
+  try {
+    await postJSON('/api/connect', { host, port });
+    await refreshServerConfig();
+  } catch (err) {
+    showConnectError(err.message);
+  }
+});
+
+connectDisconnectEl?.addEventListener('click', async () => {
+  showConnectError('');
+  try {
+    await postJSON('/api/disconnect');
+    await refreshServerConfig();
+  } catch (err) {
+    showConnectError(err.message);
+  }
+});
 
 if (showSlipCountsEl) {
   showSlipCountsEl.checked = showSlipCounts;

@@ -9,10 +9,15 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/gkirk/trimble-rawdata-dashboard/internal/connvalidate"
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/hub"
+	"github.com/gkirk/trimble-rawdata-dashboard/internal/ingest"
+	"github.com/gkirk/trimble-rawdata-dashboard/internal/prefs"
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/store"
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/version"
 )
@@ -22,14 +27,19 @@ var webFS embed.FS
 
 // Server serves the dashboard UI and SSE API.
 type Server struct {
-	Addr  string
-	Store *store.Store
-	Hub   *hub.Hub
+	Addr    string
+	Store   *store.Store
+	Hub     *hub.Hub
+	Manager *ingest.Manager
 }
 
 // Run serves until ctx is cancelled (e.g. Ctrl-C), then shuts down gracefully.
 func (s *Server) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/config", s.handleConfig)
+	mux.HandleFunc("/api/connect", s.handleConnect)
+	mux.HandleFunc("/api/disconnect", s.handleDisconnect)
+	mux.HandleFunc("/api/demo", s.handleDemo)
 	mux.HandleFunc("/api/snapshot", s.handleSnapshot)
 	mux.HandleFunc("/api/events", s.handleEvents)
 	mux.HandleFunc("/api/version", s.handleVersion)
@@ -59,6 +69,100 @@ func (s *Server) Run(ctx context.Context) error {
 	case err := <-errCh:
 		return err
 	}
+}
+
+func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	cfg := s.Manager.Config()
+	_ = json.NewEncoder(w).Encode(cfg)
+}
+
+type connectRequest struct {
+	Host string `json:"host"`
+	Port int    `json:"port"`
+	URI  string `json:"uri"`
+}
+
+func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req connectRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	var err error
+	var saveHost string
+	var savePort int
+	switch {
+	case req.Host != "" || req.Port != 0:
+		saveHost = strings.TrimSpace(req.Host)
+		savePort = req.Port
+		err = s.Manager.ConnectBrowser(req.Host, req.Port)
+	case req.URI != "":
+		if norm, normErr := connvalidate.NormalizeTCPURI(req.URI); normErr == nil {
+			if u, parseErr := url.Parse(norm); parseErr == nil {
+				saveHost = u.Hostname()
+				if p := u.Port(); p != "" {
+					savePort, _ = strconv.Atoi(p)
+				}
+			}
+		}
+		err = s.Manager.ConnectBrowserURI(req.URI)
+	default:
+		writeJSONError(w, http.StatusBadRequest, "provide host and port, or uri")
+		return
+	}
+	if saveHost != "" && savePort > 0 {
+		if saveErr := prefs.SaveConnection(saveHost, savePort); saveErr != nil {
+			slog.Warn("save connection prefs", "err", saveErr)
+		}
+	}
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "connecting"})
+}
+
+func (s *Server) handleDisconnect(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := s.Manager.Disconnect(); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "disconnected"})
+}
+
+func (s *Server) handleDemo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := s.Manager.StartDemo(); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "demo"})
+}
+
+func writeJSONError(w http.ResponseWriter, code int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
 func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
@@ -166,8 +270,11 @@ func (s *Server) serveIndex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "index unavailable", http.StatusInternalServerError)
 		return
 	}
-	tag := version.String()
-	html := strings.ReplaceAll(string(data), "__VERSION__", tag)
+	tag := version.AssetTag()
+	html := string(data)
+	html = strings.ReplaceAll(html, "__VERSION__", tag)
+	html = strings.ReplaceAll(html, "__VERSION_NUMBER__", version.Number)
+	html = strings.ReplaceAll(html, "__VERSION_FULL__", version.String())
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
 	_, _ = w.Write([]byte(html))

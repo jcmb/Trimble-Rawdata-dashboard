@@ -32,8 +32,93 @@ header, footer {
   padding: 0.75rem 1.25rem;
   border-bottom: 1px solid var(--border);
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem 1rem;
+}
+
+.connect-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem 0.75rem;
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.connect-form[hidden] {
+  display: none !important;
+}
+
+.connect-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.connect-field-port {
+  flex: 0 0 5.5rem;
+}
+
+.connect-label {
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.connect-field input {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  min-width: 0;
+}
+
+.connect-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.connect-btn {
+  padding: 0.38rem 0.75rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: rgba(88, 166, 255, 0.15);
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.connect-btn:hover {
+  background: rgba(88, 166, 255, 0.25);
+}
+
+.connect-btn.secondary {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--muted);
+}
+
+.connect-btn.secondary:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.connect-error {
+  flex: 1 1 100%;
+  font-size: 0.8rem;
+  color: var(--err);
+}
+
+.connect-error[hidden] {
+  display: none !important;
 }
 
 .version {
@@ -41,6 +126,7 @@ header, footer {
   font-size: 0.75rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+  cursor: help;
 }
 
 footer {

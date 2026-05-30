@@ -36,6 +36,12 @@ func TestBandSlotGLONASSL2(t *testing.T) {
 	}
 }
 
+func TestBandSlotGLONASSG3(t *testing.T) {
+	if got := model.BandSlot(model.SystemGLONASS, model.FreqG3, 32); got != model.BandL5 {
+		t.Fatalf("GLONASS G3: got %d want L5", got)
+	}
+}
+
 func TestTrackType23(t *testing.T) {
 	if got := model.TrackTypeName(model.SystemGPS, 0, 23); got != "CBOC" {
 		t.Fatalf("track 23: got %q", got)
@@ -88,5 +94,29 @@ func TestGalileoTrackNames(t *testing.T) {
 	}
 	if got := model.TrackTypeName(model.SystemGalileo, model.FreqE5AB, 14); got != "E5Alt" {
 		t.Fatalf("E5Alt: got %q", got)
+	}
+}
+
+func TestSystemNameMSS(t *testing.T) {
+	if got := model.SystemName(model.SystemOmniStar); got != "MSS" {
+		t.Fatalf("OmniStar: got %q", got)
+	}
+	if got := model.SystemName(model.SystemTerralite); got != "MSS" {
+		t.Fatalf("Terralite: got %q", got)
+	}
+}
+
+func TestMSSBandAndTrack(t *testing.T) {
+	if got := model.BandSlot(model.SystemOmniStar, model.FreqL1, 0); got != model.BandL1 {
+		t.Fatalf("OmniStar L1 band: got %d", got)
+	}
+	if got := model.TrackTypeName(model.SystemOmniStar, model.FreqL1, 0); got != "MSS" {
+		t.Fatalf("OmniStar track: got %q", got)
+	}
+	if got := model.BandSlot(model.SystemTerralite, model.FreqXPS, 35); got != model.BandL5 {
+		t.Fatalf("Terralite XPS band: got %d", got)
+	}
+	if got := model.TrackTypeName(model.SystemTerralite, model.FreqXPS, 35); got != "XPS" {
+		t.Fatalf("Terralite XPS track: got %q", got)
 	}
 }

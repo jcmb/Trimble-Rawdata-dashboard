@@ -19,8 +19,9 @@ import (
 
 func main() {
 	addr := flag.String("addr", ":8080", "HTTP listen address")
-	port := flag.String("port", "", "receiver URI (serial:// or tcp://)")
-	demo := flag.Bool("demo", false, "synthetic RT27/position data (no hardware)")
+	port := flag.String("port", "", "receiver URI at startup (serial:// or tcp://); optional in hosted mode")
+	demo := flag.Bool("demo", false, "start with synthetic RT27/position data")
+	allowLocal := flag.Bool("allow-local-hosts", false, "allow web UI connections to loopback and private IP addresses")
 	verboseFlag := flag.String("verbose", "off", "debug level: off, info, debug, trace")
 	flag.Parse()
 
@@ -34,11 +35,6 @@ func main() {
 	}
 	slog.Info("trimble-rawdata-dashboard", "version", version.String())
 
-	if *port == "" && !*demo {
-		slog.Error("provide -port or -demo")
-		flag.Usage()
-		os.Exit(1)
-	}
 	if *port != "" && *demo {
 		slog.Error("use either -port or -demo, not both")
 		os.Exit(1)
@@ -50,14 +46,29 @@ func main() {
 	st := store.New(*port)
 	h := hub.New()
 
-	if *demo {
-		go ingest.RunDemo(ctx, st, h)
-	} else {
-		vlog := verbose.New(vlevel)
-		go ingest.Run(ctx, ingest.Options{Port: *port, Verbose: vlog}, st, h)
+	var vlog *verbose.Logger
+	if vlevel >= verbose.Info {
+		vlog = verbose.New(vlevel)
+	}
+	mgr := ingest.NewManager(ctx, st, h, ingest.ManagerConfig{
+		AllowLocalHosts: *allowLocal,
+		Verbose:         vlog,
+		VerboseLevel:    vlevel,
+	})
+
+	switch {
+	case *demo:
+		mgr.StartFixedDemo()
+	case *port != "":
+		if err := mgr.StartFixedPort(*port); err != nil {
+			slog.Error("connect", "err", err)
+			os.Exit(1)
+		}
+	default:
+		slog.Info("hosted mode: open the web UI to connect to a receiver")
 	}
 
-	srv := &server.Server{Addr: *addr, Store: st, Hub: h}
+	srv := &server.Server{Addr: *addr, Store: st, Hub: h, Manager: mgr}
 	if err := srv.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		slog.Error("server stopped", "err", err)
 		os.Exit(1)

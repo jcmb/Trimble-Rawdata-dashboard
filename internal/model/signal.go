@@ -46,6 +46,9 @@ func TrackTypeName(system, blockType, trackType byte) string {
 	if name := sbasTrackName(blockType, trackType); system == SystemSBAS && name != "" {
 		return name
 	}
+	if name := mssTrackName(system, blockType, trackType); name != "" {
+		return name
+	}
 
 	switch trackType {
 	case 0:
@@ -167,6 +170,23 @@ func sbasTrackName(blockType, trackType byte) string {
 			return "L5-Q"
 		case 8:
 			return "L5-IQ"
+		}
+	}
+	return ""
+}
+
+func mssTrackName(system, blockType, trackType byte) string {
+	switch system {
+	case SystemOmniStar:
+		if blockType == FreqL1 || blockType == FreqS1 {
+			return "MSS"
+		}
+	case SystemTerralite:
+		if blockType == FreqXPS || trackType == 35 {
+			return "XPS"
+		}
+		if blockType == FreqL1 || blockType == FreqS1 {
+			return "MSS"
 		}
 	}
 	return ""
