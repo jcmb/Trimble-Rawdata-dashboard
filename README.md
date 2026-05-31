@@ -25,9 +25,14 @@ go run ./cmd/trimble-rawdata-dashboard -port 'tcp://192.168.1.10:5017'
 
 # Verbose logging (stderr): off | info | debug | trace
 go run ./cmd/trimble-rawdata-dashboard -port 'tcp://sps855.com:28005' -verbose debug
+
+# Developer options in the web UI (track mode numbers); also enabled with -verbose debug or trace
+go run ./cmd/trimble-rawdata-dashboard -dev
 ```
 
 Open http://localhost:8080
+
+The web UI includes a **Theme** control (System / Light / Dark). System follows the OS preference; the choice is remembered in the browser.
 
 ### Verbose levels
 
@@ -37,6 +42,8 @@ Open http://localhost:8080
 | `info` | Link stats every 10s (bytes, frames, DCOL 0x57 / 0x40 counts, assembled RT27/position) |
 | `debug` | Each DCOL packet by type (0x57, 0x40, …), GSOF records, RAWDATA pages, reassembly errors |
 | `trace` | Raw RX bytes, frame hex, stream-decoder state messages |
+
+With `-verbose debug` or `-verbose trace`, developer-only table options are shown (same as `-dev`).
 
 The UI needs **DCOL 0x57 RAWDATA** record subtypes **6** (RT27 survey) and **7** (enhanced position). Other 0x57 subtypes (e.g. 12 = receiver info) are decoded but not shown. A stream may carry **0x40 GSOF**, **0x55 RETSVDATA**, and **0x57 RAWDATA** together — all are DCOL.
 

@@ -26,6 +26,14 @@ const (
 
 // BandSlot maps RT27 measurement to L1/L2/L5/L6 column using pydcollib GetSNRs rules.
 func BandSlot(system, blockType, trackType byte) int {
+	// Track 20: BOC(1,1) pilot & data (E1 / L1C / B1C) — always L1 regardless of block index.
+	if trackType == 20 {
+		return BandL1
+	}
+	// BeiDou B2B / B2A (track 6 / 8) — always L5 regardless of block index.
+	if isBeidouSystem(system) && (trackType == 6 || trackType == 8) {
+		return BandL5
+	}
 	switch system {
 	case SystemGPS, SystemQZSS:
 		switch blockType {

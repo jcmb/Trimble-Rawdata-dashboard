@@ -31,6 +31,12 @@ type Server struct {
 	Store   *store.Store
 	Hub     *hub.Hub
 	Manager *ingest.Manager
+	ShowDev bool
+}
+
+type configResponse struct {
+	ingest.Config
+	ShowDev bool `json:"showDev"`
 }
 
 // Run serves until ctx is cancelled (e.g. Ctrl-C), then shuts down gracefully.
@@ -79,7 +85,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	cfg := s.Manager.Config()
-	_ = json.NewEncoder(w).Encode(cfg)
+	_ = json.NewEncoder(w).Encode(configResponse{Config: cfg, ShowDev: s.ShowDev})
 }
 
 type connectRequest struct {

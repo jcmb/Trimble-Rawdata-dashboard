@@ -3,7 +3,7 @@ package version
 import "time"
 
 // Number is the semantic dashboard version (bump on releases).
-var Number = "1.90"
+var Number = "1.99"
 
 // Build is set via -ldflags; otherwise stamped at process start for cache busting.
 var Build string

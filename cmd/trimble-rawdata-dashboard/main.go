@@ -23,6 +23,7 @@ func main() {
 	demo := flag.Bool("demo", false, "start with synthetic RT27/position data")
 	allowLocal := flag.Bool("allow-local-hosts", false, "allow web UI connections to loopback and private IP addresses")
 	verboseFlag := flag.String("verbose", "off", "debug level: off, info, debug, trace")
+	devFlag := flag.Bool("dev", false, "show developer options in the web UI (also enabled when -verbose is debug or trace)")
 	flag.Parse()
 
 	vlevel, err := verbose.ParseLevel(*verboseFlag)
@@ -68,7 +69,11 @@ func main() {
 		slog.Info("hosted mode: open the web UI to connect to a receiver")
 	}
 
-	srv := &server.Server{Addr: *addr, Store: st, Hub: h, Manager: mgr}
+	showDev := *devFlag || vlevel >= verbose.Debug
+	srv := &server.Server{Addr: *addr, Store: st, Hub: h, Manager: mgr, ShowDev: showDev}
+	if showDev {
+		slog.Info("developer web UI options enabled")
+	}
 	if err := srv.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		slog.Error("server stopped", "err", err)
 		os.Exit(1)

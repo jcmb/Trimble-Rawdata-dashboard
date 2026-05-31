@@ -15,6 +15,9 @@ const connectErrorEl = document.getElementById('connect-error');
 const skyLegendEl = document.getElementById('sky-legend');
 const tableFilterEl = document.getElementById('table-filter');
 const showSlipCountsEl = document.getElementById('show-slip-counts');
+const showTrackTypesEl = document.getElementById('show-track-types');
+const showTrackTypesWrapEl = document.getElementById('show-track-types-wrap');
+const themeSelectEl = document.getElementById('theme-select');
 const slipMaskEl = document.getElementById('slip-mask');
 const filterUsedEl = document.getElementById('filter-used');
 const antennaFilterEl = document.getElementById('antenna-filter');
@@ -31,8 +34,9 @@ const CONNECT_PORT_KEY = 'connectPort';
 const BAND_COLS = ['l1', 'l2', 'l5', 'l6'];
 
 const SLIP_RANK = { none: 0, '300': 1, '60': 2, now: 3 };
-const SLIP_RING = { now: '#f85149', '60': '#d29922', '300': '#8b6914' };
-const USED_RING = '#3fb950';
+let slipRing = { now: '#f85149', '60': '#d29922', '300': '#8b6914' };
+let usedRing = '#3fb950';
+let singleAntRing = '#f0883e';
 
 /** Sky plot color key — click to filter by constellation (hover for description). */
 const SKY_LEGEND = [
@@ -56,9 +60,38 @@ const ARROW_UP = '\u25B2';
 const ARROW_DOWN = '\u25BC';
 
 const SLIP_MASK_KEY = 'slipMaskEl';
+const SHOW_TRACK_TYPES_KEY = 'showTrackTypes';
+const THEME_KEY = 'theme';
+const DEFAULT_SLIP_MASK = 11;
 const ANTENNA_FILTER_KEY = 'filterAntenna';
 
-const SINGLE_ANT_RING = '#f0883e';
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function syncThemeColors() {
+  slipRing = {
+    now: cssVar('--slip-now-ring') || slipRing.now,
+    '60': cssVar('--slip-60-ring') || slipRing['60'],
+    '300': cssVar('--slip-300-ring') || slipRing['300'],
+  };
+  usedRing = cssVar('--ok') || usedRing;
+  singleAntRing = cssVar('--single-ant-ring') || singleAntRing;
+}
+
+function applyTheme(mode) {
+  themeMode = mode;
+  localStorage.setItem(THEME_KEY, mode);
+  const root = document.documentElement;
+  if (mode === 'system') root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme', mode);
+  syncThemeColors();
+  refreshDataView();
+}
+
+function applyShowDev(show) {
+  if (showTrackTypesWrapEl) showTrackTypesWrapEl.hidden = !show;
+}
 
 let allRows = [];
 let sortCol = 'sv';
@@ -71,18 +104,22 @@ let hasPositionSVData = false;
 let dualAntenna = false;
 /** @type {'both' | '0' | '1'} */
 let filterAntennaMode = localStorage.getItem(ANTENNA_FILTER_KEY) || 'both';
-let serverConfig = { hosted: false, allowLocalHosts: false };
+let serverConfig = { hosted: false, allowLocalHosts: false, showDev: false };
+let themeMode = localStorage.getItem(THEME_KEY) || 'system';
 let lastEpochSec = null;
 let showSlipCounts = localStorage.getItem('showSlipCounts') === '1';
+let showTrackTypes = localStorage.getItem(SHOW_TRACK_TYPES_KEY) === '1';
 
 function clampSlipMask(value) {
   const n = Number.parseInt(String(value), 10);
-  if (!Number.isFinite(n)) return 0;
+  if (!Number.isFinite(n)) return DEFAULT_SLIP_MASK;
   return Math.min(90, Math.max(0, n));
 }
 
 function loadSlipMask() {
-  return clampSlipMask(localStorage.getItem(SLIP_MASK_KEY) ?? 0);
+  const stored = localStorage.getItem(SLIP_MASK_KEY);
+  if (stored == null) return DEFAULT_SLIP_MASK;
+  return clampSlipMask(stored);
 }
 
 let slipMask = loadSlipMask();
@@ -234,6 +271,9 @@ function signalHoverDetail(sig, row) {
     sig.trackName || 'signal',
     `SNR ${sig.snr.toFixed(1)} dB-Hz`,
   ];
+  if (serverConfig.showDev && showTrackTypes && sig.trackType != null) {
+    parts.push(`track type ${sig.trackType}`);
+  }
   if (slipIndicated(row) && sig._slipLevel && sig._slipLevel !== 'none') {
     parts.push(`cycle slip ${slipLevelLabel(sig._slipLevel)}`);
   }
@@ -503,6 +543,16 @@ function bandHasData(band) {
   return band && band.present && band.signals && band.signals.length > 0;
 }
 
+function rowHasNonL1Band(row) {
+  return bandHasData(row.l2) || bandHasData(row.l5) || bandHasData(row.l6);
+}
+
+function fmtTrackLabel(sig) {
+  const name = sig.trackName || '';
+  if (!serverConfig.showDev || !showTrackTypes) return escapeHtml(name);
+  return escapeHtml(`${name} (${sig.trackType ?? 0})`);
+}
+
 function updateEmptyColumns(rows) {
   const empty = new Set();
   for (const col of BAND_COLS) {
@@ -535,10 +585,10 @@ function drawSky(rows) {
   const r = Math.min(cx, cy) - 24;
 
   ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = '#121820';
+  ctx.fillStyle = cssVar('--sky-bg') || '#121820';
   ctx.fillRect(0, 0, w, h);
 
-  ctx.strokeStyle = '#30363d';
+  ctx.strokeStyle = cssVar('--sky-grid') || '#30363d';
   ctx.lineWidth = 1;
   for (const el of [90, 60, 30, 0]) {
     const rr = r * (1 - el / 90);
@@ -554,7 +604,7 @@ function drawSky(rows) {
     ctx.stroke();
   }
 
-  ctx.fillStyle = '#8b949e';
+  ctx.fillStyle = cssVar('--sky-label') || '#8b949e';
   ctx.font = '11px system-ui';
   ctx.textAlign = 'center';
   ctx.fillText('N', cx, cy - r - 8);
@@ -579,7 +629,7 @@ function drawSky(rows) {
     if (slipLevel !== 'none') {
       ctx.beginPath();
       ctx.arc(x, y, 11, 0, Math.PI * 2);
-      ctx.strokeStyle = SLIP_RING[slipLevel];
+      ctx.strokeStyle = slipRing[slipLevel];
       ctx.lineWidth = slipLevel === 'now' ? 3 : 2;
       ctx.stroke();
     }
@@ -587,7 +637,7 @@ function drawSky(rows) {
     if (row._singleAntennaOnly) {
       ctx.beginPath();
       ctx.arc(x, y, 13, 0, Math.PI * 2);
-      ctx.strokeStyle = SINGLE_ANT_RING;
+      ctx.strokeStyle = singleAntRing;
       ctx.lineWidth = 2;
       ctx.setLineDash([4, 3]);
       ctx.stroke();
@@ -597,7 +647,7 @@ function drawSky(rows) {
     if (hasPositionSVData && row.usedInSolution) {
       ctx.beginPath();
       ctx.arc(x, y, 9, 0, Math.PI * 2);
-      ctx.strokeStyle = USED_RING;
+      ctx.strokeStyle = usedRing;
       ctx.lineWidth = 2;
       ctx.stroke();
     }
@@ -764,13 +814,16 @@ function updateSortHeaders() {
 function fmtBandCell(band, col, row) {
   const slipLevel = displaySlipLevel(band?._slipLevel, row);
   const slipCls = slipCellClass(slipLevel);
-  const cls = `band col-${col}${slipCls}`;
-  const title = bandHoverText(band, col, row);
+  const missingL1 = col === 'l1' && !bandHasData(band) && rowHasNonL1Band(row);
+  const cls = `band col-${col}${slipCls}${missingL1 ? ' l1-missing' : ''}`;
+  const title = missingL1
+    ? 'No L1 tracking — other bands present'
+    : bandHoverText(band, col, row);
   if (!band?.present || !band.signals?.length) {
     return fmtTd(col, `${cls} empty`, '—', title);
   }
   const snrs = band.signals.map(s => s.snr.toFixed(1)).join('/');
-  const tracks = band.signals.map(s => escapeHtml(s.trackName || '')).join('/');
+  const tracks = band.signals.map(s => fmtTrackLabel(s)).join('/');
   let slipLine = '';
   if (showSlipCounts && slipIndicated(row)) {
     const counts = band.signals.map(s => String(s._slipCount ?? 0)).join('/');
@@ -898,10 +951,21 @@ function connectSSE() {
 
 fetch('/api/snapshot').then(r => r.json()).then(applySnapshot).catch(() => {});
 
+if (themeSelectEl) {
+  if (!['system', 'light', 'dark'].includes(themeMode)) themeMode = 'system';
+  themeSelectEl.value = themeMode;
+  applyTheme(themeMode);
+  themeSelectEl.addEventListener('change', () => applyTheme(themeSelectEl.value));
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (themeMode === 'system') refreshDataView();
+  });
+} else {
+  syncThemeColors();
+}
+
 loadServerConfig();
 connectSSE();
 initSkyLegend();
-drawSky([]);
 updateSortHeaders();
 
 function formatPortLine(snap) {
@@ -914,6 +978,7 @@ function formatPortLine(snap) {
 async function refreshServerConfig() {
   try {
     serverConfig = await fetch('/api/config').then(r => r.json());
+    applyShowDev(!!serverConfig.showDev);
   } catch (_) { /* ignore */ }
 }
 
@@ -922,6 +987,7 @@ function loadServerConfig() {
     .then(r => r.json())
     .then(cfg => {
       serverConfig = cfg;
+      applyShowDev(!!cfg.showDev);
       if (cfg.hosted) {
         connectFormEl.hidden = false;
         restoreConnectionFields(cfg);
@@ -986,6 +1052,15 @@ if (showSlipCountsEl) {
   showSlipCountsEl.addEventListener('change', () => {
     showSlipCounts = showSlipCountsEl.checked;
     localStorage.setItem('showSlipCounts', showSlipCounts ? '1' : '0');
+    updateSNRTable(visibleRows());
+  });
+}
+
+if (showTrackTypesEl) {
+  showTrackTypesEl.checked = showTrackTypes;
+  showTrackTypesEl.addEventListener('change', () => {
+    showTrackTypes = showTrackTypesEl.checked;
+    localStorage.setItem(SHOW_TRACK_TYPES_KEY, showTrackTypes ? '1' : '0');
     updateSNRTable(visibleRows());
   });
 }

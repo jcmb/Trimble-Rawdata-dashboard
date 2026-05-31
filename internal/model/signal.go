@@ -38,6 +38,9 @@ type SVRowView struct {
 
 // TrackTypeName maps RT27 TrackType to a short label (pydcollib GetSNRs sys_sig_names).
 func TrackTypeName(system, blockType, trackType byte) string {
+	if name := signalCodeName(system, blockType, trackType); name != "" {
+		return name
+	}
 	if name := galileoTrackName(blockType, trackType); system == SystemGalileo && name != "" {
 		return name
 	}
@@ -62,9 +65,9 @@ func TrackTypeName(system, blockType, trackType byte) string {
 		}
 		return "E"
 	case 3:
-		return "L2C-M"
+		return "L2CM"
 	case 4:
-		return "L2C-L"
+		return "L2CL"
 	case 5:
 		return "L2C"
 	case 6:
@@ -113,6 +116,41 @@ func TrackTypeName(system, blockType, trackType byte) string {
 	}
 }
 
+// signalCodeName maps RT27 track types that denote signal codes across GNSS systems.
+func signalCodeName(system, blockType, trackType byte) string {
+	_ = blockType
+	switch trackType {
+	case 3:
+		return "L2CM"
+	case 4:
+		return "L2CL"
+	case 6:
+		if isBeidouSystem(system) {
+			return "B2B"
+		}
+	case 8:
+		if isBeidouSystem(system) {
+			return "B2A"
+		}
+	case 20:
+		switch system {
+		case SystemGPS, SystemQZSS:
+			return "L1C"
+		case SystemBeidouOld, SystemBeidou, SystemBeidouB1Geo:
+			return "B1C"
+		case SystemGalileo:
+			return "E1"
+		default:
+			return "BOC(PD)"
+		}
+	}
+	return ""
+}
+
+func isBeidouSystem(system byte) bool {
+	return system == SystemBeidouOld || system == SystemBeidou || system == SystemBeidouB1Geo
+}
+
 func galileoTrackName(blockType, trackType byte) string {
 	switch blockType {
 	case FreqE1:
@@ -149,7 +187,7 @@ func glonassTrackName(blockType, trackType byte) string {
 	case FreqG3:
 		switch trackType {
 		case 32:
-			return "G3-PD"
+			return "G3-D+P"
 		case 33:
 			return "G3-P"
 		case 34:
@@ -196,6 +234,8 @@ func mssTrackName(system, blockType, trackType byte) string {
 // TrackTypeHint returns a longer tooltip for non-obvious signal types.
 func TrackTypeHint(trackType byte) string {
 	switch trackType {
+	case 20:
+		return "BOC(1,1) Pilot & Data — Galileo E1 / GPS L1C / BDS-III B1C"
 	case 23:
 		return "MBOC(1,1) Pilot & Data — Galileo E1 / GPS L1C / BDS-III B1C"
 	case 14:

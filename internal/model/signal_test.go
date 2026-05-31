@@ -42,6 +42,73 @@ func TestBandSlotGLONASSG3(t *testing.T) {
 	}
 }
 
+func TestTrackType20(t *testing.T) {
+	if got := model.TrackTypeName(model.SystemGPS, 0, 20); got != "L1C" {
+		t.Fatalf("GPS track 20: got %q want L1C", got)
+	}
+	if got := model.TrackTypeName(model.SystemBeidou, model.FreqB1, 20); got != "B1C" {
+		t.Fatalf("BeiDou track 20: got %q want B1C", got)
+	}
+	if got := model.TrackTypeName(model.SystemGalileo, model.FreqE1, 20); got != "E1" {
+		t.Fatalf("Galileo E1 track 20: got %q want E1", got)
+	}
+	if got := model.TrackTypeHint(20); got == "" {
+		t.Fatal("track 20 hint expected")
+	}
+}
+
+func TestBandSlotTrackType20AlwaysL1(t *testing.T) {
+	// Block types that would otherwise land in L5/L6 must still use L1 for mode 20.
+	cases := []struct {
+		name      string
+		system    byte
+		blockType byte
+	}{
+		{"GPS wrong block", model.SystemGPS, model.FreqL5},
+		{"Galileo wrong block", model.SystemGalileo, model.FreqL5},
+		{"BeiDou B3 block", model.SystemBeidou, model.FreqB3},
+		{"QZSS", model.SystemQZSS, model.FreqL2},
+	}
+	for _, tc := range cases {
+		if got := model.BandSlot(tc.system, tc.blockType, 20); got != model.BandL1 {
+			t.Fatalf("%s: BandSlot got %d want L1", tc.name, got)
+		}
+	}
+}
+
+func TestTrackTypeL2C(t *testing.T) {
+	if got := model.TrackTypeName(model.SystemGPS, model.FreqL2, 3); got != "L2CM" {
+		t.Fatalf("track 3: got %q want L2CM", got)
+	}
+	if got := model.TrackTypeName(model.SystemGPS, model.FreqL2, 4); got != "L2CL" {
+		t.Fatalf("track 4: got %q want L2CL", got)
+	}
+}
+
+func TestTrackTypeBeidouB2(t *testing.T) {
+	if got := model.TrackTypeName(model.SystemBeidou, model.FreqB1, 6); got != "B2B" {
+		t.Fatalf("BDS track 6: got %q want B2B", got)
+	}
+	if got := model.TrackTypeName(model.SystemBeidou, model.FreqB1, 8); got != "B2A" {
+		t.Fatalf("BDS track 8: got %q want B2A", got)
+	}
+	if got := model.BandSlot(model.SystemBeidou, model.FreqB1, 6); got != model.BandL5 {
+		t.Fatalf("BDS track 6 band: got %d want L5", got)
+	}
+	if got := model.BandSlot(model.SystemBeidou, model.FreqB3, 8); got != model.BandL5 {
+		t.Fatalf("BDS track 8 band: got %d want L5", got)
+	}
+}
+
+func TestTrackTypeGPSL5Unchanged(t *testing.T) {
+	if got := model.TrackTypeName(model.SystemGPS, model.FreqL5, 6); got != "L5-I" {
+		t.Fatalf("GPS track 6: got %q want L5-I", got)
+	}
+	if got := model.TrackTypeName(model.SystemGPS, model.FreqL5, 8); got != "L5-IQ" {
+		t.Fatalf("GPS track 8: got %q want L5-IQ", got)
+	}
+}
+
 func TestTrackType23(t *testing.T) {
 	if got := model.TrackTypeName(model.SystemGPS, 0, 23); got != "CBOC" {
 		t.Fatalf("track 23: got %q", got)
@@ -54,6 +121,12 @@ func TestTrackType14(t *testing.T) {
 	}
 	if got := model.TrackTypeName(model.SystemGPS, model.FreqE5AB, 14); got != "AltBoc" {
 		t.Fatalf("GPS AltBoc: got %q", got)
+	}
+}
+
+func TestGlonassG3Track32(t *testing.T) {
+	if got := model.TrackTypeName(model.SystemGLONASS, model.FreqG3, 32); got != "G3-D+P" {
+		t.Fatalf("G3 track 32: got %q want G3-D+P", got)
 	}
 }
 
