@@ -935,21 +935,51 @@ document.querySelectorAll('#snr-table th.sortable').forEach(th => {
   });
 });
 
+function apiBasePath() {
+  const raw = document.documentElement.dataset.basePath || '';
+  if (!raw) return '';
+  return raw.endsWith('/') ? raw.slice(0, -1) : raw;
+}
+
+function apiPath(path) {
+  const p = path.startsWith('/') ? path : `/${path}`;
+  return `${apiBasePath()}${p}`;
+}
+
+let eventSource = null;
+
 function connectSSE() {
-  const es = new EventSource('/api/events');
-  es.onmessage = (ev) => {
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+  }
+  eventSource = new EventSource(apiPath('/api/events'));
+  eventSource.onmessage = (ev) => {
     try {
       const msg = JSON.parse(ev.data);
       if (msg.type === 'snapshot' && msg.snapshot) applySnapshot(msg.snapshot);
     } catch (_) { /* ignore */ }
   };
-  es.onerror = () => {
-    es.close();
+  eventSource.onerror = () => {
+    eventSource?.close();
+    eventSource = null;
     setTimeout(connectSSE, 2000);
   };
 }
 
-fetch('/api/snapshot').then(r => r.json()).then(applySnapshot).catch(() => {});
+function apiFetch(path, options = {}) {
+  return fetch(apiPath(path), { credentials: 'same-origin', ...options });
+}
+
+function disconnectOnTabClose() {
+  if (serverConfig.fixedConnection) return;
+  const body = new Blob(['{}'], { type: 'application/json' });
+  navigator.sendBeacon(apiPath('/api/disconnect'), body);
+}
+
+window.addEventListener('pagehide', disconnectOnTabClose);
+
+apiFetch('/api/snapshot').then(r => r.json()).then(applySnapshot).catch(() => {});
 
 if (themeSelectEl) {
   if (!['system', 'light', 'dark'].includes(themeMode)) themeMode = 'system';
@@ -977,13 +1007,13 @@ function formatPortLine(snap) {
 
 async function refreshServerConfig() {
   try {
-    serverConfig = await fetch('/api/config').then(r => r.json());
+    serverConfig = await apiFetch('/api/config').then(r => r.json());
     applyShowDev(!!serverConfig.showDev);
   } catch (_) { /* ignore */ }
 }
 
 function loadServerConfig() {
-  fetch('/api/config')
+  apiFetch('/api/config')
     .then(r => r.json())
     .then(cfg => {
       serverConfig = cfg;
@@ -1010,7 +1040,7 @@ function showConnectError(msg) {
 }
 
 async function postJSON(url, body) {
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body ?? {}),
@@ -1032,6 +1062,9 @@ connectFormEl?.addEventListener('submit', async (ev) => {
   try {
     await postJSON('/api/connect', { host, port });
     await refreshServerConfig();
+    connectSSE();
+    const snap = await apiFetch('/api/snapshot').then(r => r.json());
+    applySnapshot(snap);
   } catch (err) {
     showConnectError(err.message);
   }
@@ -1040,8 +1073,10 @@ connectFormEl?.addEventListener('submit', async (ev) => {
 connectDisconnectEl?.addEventListener('click', async () => {
   showConnectError('');
   try {
-    await postJSON('/api/disconnect');
+    const data = await postJSON('/api/disconnect');
+    if (data.snapshot) applySnapshot(data.snapshot);
     await refreshServerConfig();
+    connectSSE();
   } catch (err) {
     showConnectError(err.message);
   }

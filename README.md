@@ -30,9 +30,38 @@ go run ./cmd/trimble-rawdata-dashboard -port 'tcp://sps855.com:28005' -verbose d
 go run ./cmd/trimble-rawdata-dashboard -dev
 ```
 
-Open http://localhost:8080
+Open http://localhost:8080 (direct/local access).
 
 The web UI includes a **Theme** control (System / Light / Dark). System follows the OS preference; the choice is remembered in the browser.
+
+### Multiple browser users
+
+Each browser tab gets its own session (cookie). Users can connect to **different** receivers at the same time. Multiple users on the **same** host:port share one receiver link and the same live data; the link is closed only after the **last** user disconnects (Disconnect button or closing the tab).
+
+### Reverse proxy
+
+Use `-base-path` when the dashboard is served under a URL prefix (local direct access keeps the default root `/`):
+
+```bash
+go run ./cmd/trimble-rawdata-dashboard -base-path /trimble-dashboard
+```
+
+Open http://localhost:8080/trimble-dashboard (or your proxy’s public URL with the same path).
+
+Example **nginx** (SSE needs buffering off):
+
+```nginx
+location /trimble-dashboard/ {
+    proxy_pass http://127.0.0.1:8080/trimble-dashboard/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_buffering off;
+}
+```
+
+Start the app with `-base-path /trimble-dashboard` so routes, static assets, API calls, and session cookies align with the proxy path.
 
 ### Verbose levels
 

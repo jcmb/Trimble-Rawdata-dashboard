@@ -9,10 +9,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/gkirk/trimble-rawdata-dashboard/internal/hub"
-	"github.com/gkirk/trimble-rawdata-dashboard/internal/ingest"
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/server"
-	"github.com/gkirk/trimble-rawdata-dashboard/internal/store"
+	"github.com/gkirk/trimble-rawdata-dashboard/internal/sessions"
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/verbose"
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/version"
 )
@@ -24,6 +22,7 @@ func main() {
 	allowLocal := flag.Bool("allow-local-hosts", false, "allow web UI connections to loopback and private IP addresses")
 	verboseFlag := flag.String("verbose", "off", "debug level: off, info, debug, trace")
 	devFlag := flag.Bool("dev", false, "show developer options in the web UI (also enabled when -verbose is debug or trace)")
+	basePathFlag := flag.String("base-path", "", "URL prefix when served behind a reverse proxy (e.g. /trimble-dashboard)")
 	flag.Parse()
 
 	vlevel, err := verbose.ParseLevel(*verboseFlag)
@@ -44,14 +43,11 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	st := store.New(*port)
-	h := hub.New()
-
 	var vlog *verbose.Logger
 	if vlevel >= verbose.Info {
 		vlog = verbose.New(vlevel)
 	}
-	mgr := ingest.NewManager(ctx, st, h, ingest.ManagerConfig{
+	sessMgr := sessions.NewManager(ctx, sessions.Config{
 		AllowLocalHosts: *allowLocal,
 		Verbose:         vlog,
 		VerboseLevel:    vlevel,
@@ -59,9 +55,9 @@ func main() {
 
 	switch {
 	case *demo:
-		mgr.StartFixedDemo()
+		sessMgr.StartFixedDemo()
 	case *port != "":
-		if err := mgr.StartFixedPort(*port); err != nil {
+		if err := sessMgr.StartFixedPort(*port); err != nil {
 			slog.Error("connect", "err", err)
 			os.Exit(1)
 		}
@@ -70,7 +66,12 @@ func main() {
 	}
 
 	showDev := *devFlag || vlevel >= verbose.Debug
-	srv := &server.Server{Addr: *addr, Store: st, Hub: h, Manager: mgr, ShowDev: showDev}
+	srv := &server.Server{
+		Addr:     *addr,
+		BasePath: server.NormalizeBasePath(*basePathFlag),
+		Sessions: sessMgr,
+		ShowDev:  showDev,
+	}
 	if showDev {
 		slog.Info("developer web UI options enabled")
 	}

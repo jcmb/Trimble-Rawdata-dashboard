@@ -15,10 +15,8 @@ import (
 	"time"
 
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/connvalidate"
-	"github.com/gkirk/trimble-rawdata-dashboard/internal/hub"
-	"github.com/gkirk/trimble-rawdata-dashboard/internal/ingest"
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/prefs"
-	"github.com/gkirk/trimble-rawdata-dashboard/internal/store"
+	"github.com/gkirk/trimble-rawdata-dashboard/internal/sessions"
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/version"
 )
 
@@ -27,16 +25,16 @@ var webFS embed.FS
 
 // Server serves the dashboard UI and SSE API.
 type Server struct {
-	Addr    string
-	Store   *store.Store
-	Hub     *hub.Hub
-	Manager *ingest.Manager
-	ShowDev bool
+	Addr     string
+	BasePath string
+	Sessions *sessions.Manager
+	ShowDev  bool
 }
 
 type configResponse struct {
-	ingest.Config
-	ShowDev bool `json:"showDev"`
+	sessions.Policy
+	ShowDev  bool   `json:"showDev"`
+	BasePath string `json:"basePath,omitempty"`
 }
 
 // Run serves until ctx is cancelled (e.g. Ctrl-C), then shuts down gracefully.
@@ -51,11 +49,15 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.HandleFunc("/api/version", s.handleVersion)
 	mux.HandleFunc("/", s.handleWeb)
 
-	httpSrv := &http.Server{Addr: s.Addr, Handler: mux}
+	httpSrv := &http.Server{Addr: s.Addr, Handler: s.mountHandler(mux)}
 
 	errCh := make(chan error, 1)
 	go func() {
-		slog.Info("dashboard listening", "addr", s.Addr, "version", version.String())
+		if s.BasePath != "" {
+			slog.Info("dashboard listening", "addr", s.Addr, "basePath", s.BasePath, "version", version.String())
+		} else {
+			slog.Info("dashboard listening", "addr", s.Addr, "version", version.String())
+		}
 		err := httpSrv.ListenAndServe()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
@@ -84,8 +86,31 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	cfg := s.Manager.Config()
-	_ = json.NewEncoder(w).Encode(configResponse{Config: cfg, ShowDev: s.ShowDev})
+	_ = json.NewEncoder(w).Encode(configResponse{
+		Policy:   s.Sessions.Policy(),
+		ShowDev:  s.ShowDev,
+		BasePath: s.BasePath,
+	})
+}
+
+func (s *Server) mountHandler(inner http.Handler) http.Handler {
+	if s.BasePath == "" {
+		return inner
+	}
+	outer := http.NewServeMux()
+	outer.Handle(s.BasePath+"/", http.StripPrefix(s.BasePath, inner))
+	outer.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		http.Redirect(w, r, s.BasePath+"/", http.StatusFound)
+	})
+	return outer
+}
+
+func (s *Server) sessionCookiePath() string {
+	return cookiePath(s.BasePath)
 }
 
 type connectRequest struct {
@@ -99,6 +124,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	sid := s.Sessions.SessionID(w, r, s.sessionCookiePath())
 	var req connectRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid JSON body")
@@ -111,7 +137,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	case req.Host != "" || req.Port != 0:
 		saveHost = strings.TrimSpace(req.Host)
 		savePort = req.Port
-		err = s.Manager.ConnectBrowser(req.Host, req.Port)
+		err = s.Sessions.ConnectBrowser(sid, req.Host, req.Port)
 	case req.URI != "":
 		if norm, normErr := connvalidate.NormalizeTCPURI(req.URI); normErr == nil {
 			if u, parseErr := url.Parse(norm); parseErr == nil {
@@ -121,7 +147,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		err = s.Manager.ConnectBrowserURI(req.URI)
+		err = s.Sessions.ConnectBrowserURI(sid, req.URI)
 	default:
 		writeJSONError(w, http.StatusBadRequest, "provide host and port, or uri")
 		return
@@ -144,12 +170,16 @@ func (s *Server) handleDisconnect(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if err := s.Manager.Disconnect(); err != nil {
+	sid := s.Sessions.SessionID(w, r, s.sessionCookiePath())
+	if err := s.Sessions.Disconnect(sid); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{"status": "disconnected"})
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"status":   "disconnected",
+		"snapshot": s.Sessions.Snapshot(sid),
+	})
 }
 
 func (s *Server) handleDemo(w http.ResponseWriter, r *http.Request) {
@@ -157,7 +187,8 @@ func (s *Server) handleDemo(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if err := s.Manager.StartDemo(); err != nil {
+	sid := s.Sessions.SessionID(w, r, s.sessionCookiePath())
+	if err := s.Sessions.StartDemo(sid); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -182,9 +213,10 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSnapshot(w http.ResponseWriter, r *http.Request) {
+	sid := s.Sessions.SessionID(w, r, s.sessionCookiePath())
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	_ = json.NewEncoder(w).Encode(s.Store.Snapshot())
+	_ = json.NewEncoder(w).Encode(s.Sessions.Snapshot(sid))
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
@@ -194,16 +226,17 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sid := s.Sessions.SessionID(w, r, s.sessionCookiePath())
+	ch := s.Sessions.Subscribe(sid)
+	defer s.Sessions.Unsubscribe(sid, ch)
+
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	ch := s.Hub.Subscribe()
-	defer s.Hub.Unsubscribe(ch)
-
 	init, _ := json.Marshal(map[string]any{
 		"type":     "snapshot",
-		"snapshot": s.Store.Snapshot(),
+		"snapshot": s.Sessions.Snapshot(sid),
 	})
 	fmt.Fprintf(w, "data: %s\n\n", init)
 	flusher.Flush()
@@ -278,9 +311,15 @@ func (s *Server) serveIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	tag := version.AssetTag()
 	html := string(data)
+	pathPrefix := "/"
+	if s.BasePath != "" {
+		pathPrefix = s.BasePath + "/"
+	}
 	html = strings.ReplaceAll(html, "__VERSION__", tag)
 	html = strings.ReplaceAll(html, "__VERSION_NUMBER__", version.Number)
 	html = strings.ReplaceAll(html, "__VERSION_FULL__", version.String())
+	html = strings.ReplaceAll(html, "__BASE_PATH__", s.BasePath)
+	html = strings.ReplaceAll(html, "__PATH_PREFIX__", pathPrefix)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
 	_, _ = w.Write([]byte(html))
