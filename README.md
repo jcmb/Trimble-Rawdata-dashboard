@@ -63,7 +63,7 @@ Binaries are written to `dist/`:
 | `trimble-rawdata-dashboard-windows-amd64.exe` | Windows 64-bit |
 | `trimble-rawdata-dashboard-darwin-arm64` | macOS Apple Silicon |
 | `trimble-rawdata-dashboard-linux-amd64` | Linux 64-bit |
-| `trimble-rawdata-dashboard-linux-386` | Linux 32-bit |
+| `trimble-rawdata-dashboard-linux-arm32` | Linux ARM32 (armv7) |
 
 Override output directory: `OUT_DIR=/tmp/out ./scripts/build.sh`
 

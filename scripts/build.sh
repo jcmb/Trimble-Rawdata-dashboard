@@ -24,7 +24,9 @@ build() {
 build windows amd64 trimble-rawdata-dashboard-windows-amd64.exe
 build darwin  arm64 trimble-rawdata-dashboard-darwin-arm64
 build linux   amd64 trimble-rawdata-dashboard-linux-amd64
-build linux   386   trimble-rawdata-dashboard-linux-386
+echo "→ linux/arm (GOARM=7) → trimble-rawdata-dashboard-linux-arm32"
+CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 \
+  go build -trimpath -ldflags "$LDFLAGS" -o "$OUT_DIR/trimble-rawdata-dashboard-linux-arm32" "$PKG"
 
 echo
 echo "Built into $OUT_DIR:"
