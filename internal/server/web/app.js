@@ -946,6 +946,24 @@ function apiPath(path) {
   return `${apiBasePath()}${p}`;
 }
 
+function dashboardSessionId() {
+  const key = 'dashboardSessionId';
+  let id = sessionStorage.getItem(key);
+  if (!id) {
+    id = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `tab-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    sessionStorage.setItem(key, id);
+  }
+  return id;
+}
+
+function apiPathWithSession(path) {
+  const base = apiPath(path);
+  const sep = base.includes('?') ? '&' : '?';
+  return `${base}${sep}sid=${encodeURIComponent(dashboardSessionId())}`;
+}
+
 let eventSource = null;
 
 function connectSSE() {
@@ -953,7 +971,7 @@ function connectSSE() {
     eventSource.close();
     eventSource = null;
   }
-  eventSource = new EventSource(apiPath('/api/events'));
+  eventSource = new EventSource(apiPathWithSession('/api/events'));
   eventSource.onmessage = (ev) => {
     try {
       const msg = JSON.parse(ev.data);
@@ -968,13 +986,19 @@ function connectSSE() {
 }
 
 function apiFetch(path, options = {}) {
-  return fetch(apiPath(path), { credentials: 'same-origin', ...options });
+  const headers = new Headers(options.headers || {});
+  headers.set('X-Dashboard-Session', dashboardSessionId());
+  return fetch(apiPath(path), { ...options, headers, credentials: 'same-origin' });
 }
 
 function disconnectOnTabClose() {
   if (serverConfig.fixedConnection) return;
   const body = new Blob(['{}'], { type: 'application/json' });
-  navigator.sendBeacon(apiPath('/api/disconnect'), body);
+  navigator.sendBeacon(apiPathWithSession('/api/disconnect'), body);
+}
+
+function blockWheelOnNumericInput(el) {
+  el?.addEventListener('wheel', (e) => e.preventDefault(), { passive: false });
 }
 
 window.addEventListener('pagehide', disconnectOnTabClose);
@@ -1057,7 +1081,7 @@ connectFormEl?.addEventListener('submit', async (ev) => {
   ev.preventDefault();
   showConnectError('');
   const host = connectHostEl.value.trim();
-  const port = parseInt(connectPortEl.value, 10);
+  const port = parseConnectPort();
   persistConnectionDraft(host, port);
   try {
     await postJSON('/api/connect', { host, port });
@@ -1100,6 +1124,9 @@ if (showTrackTypesEl) {
   });
 }
 
+blockWheelOnNumericInput(slipMaskEl);
+blockWheelOnNumericInput(connectPortEl);
+
 if (slipMaskEl) {
   slipMaskEl.value = String(slipMask);
   const applySlipMask = () => {
@@ -1108,8 +1135,16 @@ if (slipMaskEl) {
     localStorage.setItem(SLIP_MASK_KEY, String(slipMask));
     refreshDataView();
   };
-  slipMaskEl.addEventListener('change', applySlipMask);
   slipMaskEl.addEventListener('input', applySlipMask);
+  slipMaskEl.addEventListener('change', applySlipMask);
+}
+
+function parseConnectPort() {
+  const n = Number.parseInt(String(connectPortEl?.value ?? ''), 10);
+  if (!Number.isFinite(n) || n < 1 || n > 65535) {
+    throw new Error('port must be 1–65535');
+  }
+  return n;
 }
 
 if (antennaFilterEl) {

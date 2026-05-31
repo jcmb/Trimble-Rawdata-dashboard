@@ -55,6 +55,28 @@ func TestSharedStreamRefCount(t *testing.T) {
 	t.Fatal("stream should stop after last session disconnects")
 }
 
+func TestTwoExplicitSessionsDifferentPorts(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	m := NewManager(ctx, Config{})
+	m.registerSessionLocked("browser-a")
+	m.registerSessionLocked("browser-b")
+
+	if err := m.ConnectBrowserURI("browser-a", "tcp://example.com:28005"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.ConnectBrowserURI("browser-b", "tcp://example.com:28006"); err != nil {
+		t.Fatal(err)
+	}
+	if !m.streamActive("tcp://example.com:28005") || !m.streamActive("tcp://example.com:28006") {
+		t.Fatal("both streams should stay active")
+	}
+	if m.streamRefCount("tcp://example.com:28005") != 1 || m.streamRefCount("tcp://example.com:28006") != 1 {
+		t.Fatalf("refcounts: %d %d", m.streamRefCount("tcp://example.com:28005"), m.streamRefCount("tcp://example.com:28006"))
+	}
+}
+
 func TestDifferentStreams(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

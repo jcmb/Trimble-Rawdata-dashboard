@@ -109,10 +109,6 @@ func (s *Server) mountHandler(inner http.Handler) http.Handler {
 	return outer
 }
 
-func (s *Server) sessionCookiePath() string {
-	return cookiePath(s.BasePath)
-}
-
 type connectRequest struct {
 	Host string `json:"host"`
 	Port int    `json:"port"`
@@ -124,7 +120,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	sid := s.Sessions.SessionID(w, r, s.sessionCookiePath())
+	sid := s.Sessions.ResolveSessionID(r)
 	var req connectRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid JSON body")
@@ -170,7 +166,7 @@ func (s *Server) handleDisconnect(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	sid := s.Sessions.SessionID(w, r, s.sessionCookiePath())
+	sid := s.Sessions.ResolveSessionID(r)
 	if err := s.Sessions.Disconnect(sid); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -187,7 +183,7 @@ func (s *Server) handleDemo(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	sid := s.Sessions.SessionID(w, r, s.sessionCookiePath())
+	sid := s.Sessions.ResolveSessionID(r)
 	if err := s.Sessions.StartDemo(sid); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -213,7 +209,7 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSnapshot(w http.ResponseWriter, r *http.Request) {
-	sid := s.Sessions.SessionID(w, r, s.sessionCookiePath())
+	sid := s.Sessions.ResolveSessionID(r)
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(s.Sessions.Snapshot(sid))
@@ -226,7 +222,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sid := s.Sessions.SessionID(w, r, s.sessionCookiePath())
+	sid := s.Sessions.ResolveSessionID(r)
 	ch := s.Sessions.Subscribe(sid)
 	defer s.Sessions.Unsubscribe(sid, ch)
 

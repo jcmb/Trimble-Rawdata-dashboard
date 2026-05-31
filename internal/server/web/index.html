@@ -17,7 +17,7 @@
       </label>
       <label class="connect-field connect-field-port">
         <span class="connect-label">Port</span>
-        <input id="connect-port" type="number" min="1" max="65535" value="28005" required>
+        <input id="connect-port" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" value="28005" required>
       </label>
       <button type="submit" class="connect-btn">Connect</button>
       <button type="button" id="connect-disconnect" class="connect-btn secondary">Disconnect</button>
@@ -50,7 +50,7 @@
           </div>
           <label class="slip-mask-field" title="Hide cycle slip indicators for SVs below this elevation">
             <span class="slip-mask-label">Slip mask El°</span>
-            <input id="slip-mask" type="number" min="0" max="90" step="1" value="11">
+            <input id="slip-mask" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" value="11">
           </label>
         </div>
         <div id="antenna-filter" class="antenna-filter" hidden>

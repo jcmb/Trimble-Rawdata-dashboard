@@ -459,6 +459,20 @@ canvas#sky {
   letter-spacing: 0.04em;
 }
 
+.slip-mask-field input,
+.connect-field-port input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.slip-mask-field input::-webkit-outer-spin-button,
+.slip-mask-field input::-webkit-inner-spin-button,
+.connect-field-port input::-webkit-outer-spin-button,
+.connect-field-port input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 .slip-mask-field input {
   width: 3.5rem;
   padding: 0.25rem 0.4rem;

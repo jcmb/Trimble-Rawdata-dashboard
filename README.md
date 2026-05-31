@@ -36,7 +36,7 @@ The web UI includes a **Theme** control (System / Light / Dark). System follows 
 
 ### Multiple browser users
 
-Each browser tab gets its own session (cookie). Users can connect to **different** receivers at the same time. Multiple users on the **same** host:port share one receiver link and the same live data; the link is closed only after the **last** user disconnects (Disconnect button or closing the tab).
+Each browser tab gets its own session id (`sessionStorage`, sent as `X-Dashboard-Session` / `sid=` on SSE). Users can connect to **different** receivers at the same time. Multiple users on the **same** host:port share one receiver link and the same live data; the link is closed only after the **last** user disconnects (Disconnect button or closing the tab).
 
 ### Reverse proxy
 

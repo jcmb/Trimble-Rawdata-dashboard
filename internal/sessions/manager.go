@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/connvalidate"
@@ -19,8 +20,10 @@ import (
 )
 
 const (
-	sessionCookie = "dashsid"
-	demoStreamKey = "demo"
+	sessionCookie  = "dashsid"
+	sessionHeader  = "X-Dashboard-Session"
+	sessionQuery   = "sid"
+	demoStreamKey  = "demo"
 )
 
 // Config configures multi-session ingest.
@@ -124,22 +127,45 @@ func (m *Manager) StartFixedDemo() {
 	_ = m.startStreamLocked(demoStreamKey, "", true)
 }
 
-// SessionID returns the browser session id, creating one and setting a cookie if needed.
-// cookiePath is the cookie Path attribute (e.g. "/" or "/dashboard/").
-func (m *Manager) SessionID(w http.ResponseWriter, r *http.Request, cookiePath string) string {
-	if cookiePath == "" {
-		cookiePath = "/"
+// ResolveSessionID returns the browser tab session (header/query preferred over shared cookie).
+func (m *Manager) ResolveSessionID(r *http.Request) string {
+	if id := strings.TrimSpace(r.Header.Get(sessionHeader)); validSessionID(id) {
+		m.registerSessionLocked(id)
+		return id
 	}
-	if c, err := r.Cookie(sessionCookie); err == nil && c.Value != "" {
-		m.mu.Lock()
-		if _, ok := m.sessions[c.Value]; ok {
-			m.mu.Unlock()
-			return c.Value
-		}
-		m.mu.Unlock()
+	if id := strings.TrimSpace(r.URL.Query().Get(sessionQuery)); validSessionID(id) {
+		m.registerSessionLocked(id)
+		return id
+	}
+	if c, err := r.Cookie(sessionCookie); err == nil && validSessionID(c.Value) {
+		m.registerSessionLocked(c.Value)
+		return c.Value
 	}
 	id := newSessionID()
+	m.registerSessionLocked(id)
+	return id
+}
+
+func validSessionID(id string) bool {
+	if len(id) < 8 || len(id) > 64 {
+		return false
+	}
+	for _, c := range id {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func (m *Manager) registerSessionLocked(id string) {
 	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.sessions[id]; ok {
+		return
+	}
 	m.sessions[id] = &clientSession{id: id}
 	if m.fixed && m.fixedKey != "" {
 		m.sessions[id].streamKey = m.fixedKey
@@ -147,15 +173,6 @@ func (m *Manager) SessionID(w http.ResponseWriter, r *http.Request, cookiePath s
 			st.sessions[id] = struct{}{}
 		}
 	}
-	m.mu.Unlock()
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookie,
-		Value:    id,
-		Path:     cookiePath,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
-	return id
 }
 
 // ConnectBrowser attaches the session to a TCP receiver (shared with other sessions on same host:port).
