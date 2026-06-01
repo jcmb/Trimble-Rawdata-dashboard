@@ -30,6 +30,9 @@ func Run(ctx context.Context, opts Options, st *store.Store, h *hub.Hub) {
 			return
 		}
 		if err := runOnce(ctx, opts, st, h); err != nil {
+			if ctx.Err() != nil {
+				return
+			}
 			slog.Warn("receiver disconnected", "err", err)
 			snap := st.SetError(err.Error())
 			snap.Connected = false

@@ -27,9 +27,14 @@ func (h *Hub) Subscribe() chan []byte {
 
 func (h *Hub) Unsubscribe(ch chan []byte) {
 	h.mu.Lock()
-	delete(h.clients, ch)
+	_, ok := h.clients[ch]
+	if ok {
+		delete(h.clients, ch)
+	}
 	h.mu.Unlock()
-	close(ch)
+	if ok {
+		close(ch)
+	}
 }
 
 func (h *Hub) Publish(ev model.Event) {
@@ -38,12 +43,22 @@ func (h *Hub) Publish(ev model.Event) {
 		return
 	}
 	h.mu.RLock()
-	defer h.mu.RUnlock()
+	chans := make([]chan []byte, 0, len(h.clients))
 	for ch := range h.clients {
-		select {
-		case ch <- data:
-		default:
-		}
+		chans = append(chans, ch)
+	}
+	h.mu.RUnlock()
+
+	for _, ch := range chans {
+		h.trySend(ch, data)
+	}
+}
+
+func (h *Hub) trySend(ch chan []byte, data []byte) {
+	defer func() { _ = recover() }()
+	select {
+	case ch <- data:
+	default:
 	}
 }
 

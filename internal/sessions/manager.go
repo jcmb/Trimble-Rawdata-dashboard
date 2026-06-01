@@ -62,13 +62,14 @@ type clientSession struct {
 }
 
 type sharedStream struct {
-	key      string
-	uri      string
-	demo     bool
-	store    *store.Store
-	hub      *hub.Hub
-	sessions map[string]struct{}
-	cancel   context.CancelFunc
+	key        string
+	uri        string
+	demo       bool
+	store      *store.Store
+	hub        *hub.Hub
+	sessions   map[string]struct{}
+	cancel     context.CancelFunc
+	ingestDone chan struct{}
 }
 
 // NewManager creates a session manager for hosted or fixed-startup mode.
@@ -366,18 +367,22 @@ func (m *Manager) startStreamLocked(key, uri string, demo bool) error {
 		sessions: make(map[string]struct{}),
 		cancel:   cancel,
 	}
+	st.ingestDone = make(chan struct{})
 	m.streams[key] = st
-	if demo {
-		go ingest.RunDemo(ctx, st.store, st.hub)
-	} else {
+	go func() {
+		defer close(st.ingestDone)
+		if demo {
+			ingest.RunDemo(ctx, st.store, st.hub)
+			return
+		}
 		opts := ingest.Options{Port: uri}
 		if m.cfg.Verbose != nil {
 			opts.Verbose = m.cfg.Verbose
 		} else if m.cfg.VerboseLevel >= verbose.Info {
 			opts.Verbose = verbose.New(m.cfg.VerboseLevel)
 		}
-		go ingest.Run(ctx, opts, st.store, st.hub)
-	}
+		ingest.Run(ctx, opts, st.store, st.hub)
+	}()
 	return nil
 }
 
@@ -385,6 +390,9 @@ func (m *Manager) stopStreamLocked(st *sharedStream) {
 	if st.cancel != nil {
 		st.cancel()
 		st.cancel = nil
+	}
+	if st.ingestDone != nil {
+		<-st.ingestDone
 	}
 	disconnected := st.store.SetConnected(false)
 	disconnected.LastError = ""
