@@ -771,7 +771,10 @@ function compareRows(a, b, col) {
     case 'system':
       return a.systemName.localeCompare(b.systemName) || a.svid - b.svid;
     case 'sv':
-      return a.svid - b.svid || (a.antenna ?? 0) - (b.antenna ?? 0) || a.system - b.system;
+      return a.svid - b.svid
+        || a.systemName.localeCompare(b.systemName)
+        || a.system - b.system
+        || (a.antenna ?? 0) - (b.antenna ?? 0);
     case 'antenna':
       return (a.antenna ?? 0) - (b.antenna ?? 0) || a.system - b.system || a.svid - b.svid;
     case 'used': {
