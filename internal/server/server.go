@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/gkirk/trimble-rawdata-dashboard/internal/browseropen"
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/connvalidate"
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/prefs"
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/sessions"
@@ -25,10 +27,11 @@ var webFS embed.FS
 
 // Server serves the dashboard UI and SSE API.
 type Server struct {
-	Addr     string
-	BasePath string
-	Sessions *sessions.Manager
-	ShowDev  bool
+	Addr        string
+	BasePath    string
+	Sessions    *sessions.Manager
+	ShowDev     bool
+	OpenBrowser bool
 }
 
 type configResponse struct {
@@ -49,16 +52,28 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.HandleFunc("/api/version", s.handleVersion)
 	mux.HandleFunc("/", s.handleWeb)
 
-	httpSrv := &http.Server{Addr: s.Addr, Handler: s.mountHandler(mux)}
+	ln, err := net.Listen("tcp", NormalizeListenAddr(s.Addr))
+	if err != nil {
+		return err
+	}
+	defer ln.Close()
+
+	dashURL := DashboardURL(ln.Addr(), s.BasePath)
+	httpSrv := &http.Server{Handler: s.mountHandler(mux)}
 
 	errCh := make(chan error, 1)
 	go func() {
 		if s.BasePath != "" {
-			slog.Info("dashboard listening", "addr", s.Addr, "basePath", s.BasePath, "version", version.String())
+			slog.Info("dashboard listening", "addr", ln.Addr().String(), "url", dashURL, "basePath", s.BasePath, "version", version.String())
 		} else {
-			slog.Info("dashboard listening", "addr", s.Addr, "version", version.String())
+			slog.Info("dashboard listening", "addr", ln.Addr().String(), "url", dashURL, "version", version.String())
 		}
-		err := httpSrv.ListenAndServe()
+		if s.OpenBrowser {
+			if err := browseropen.Open(dashURL); err != nil {
+				slog.Warn("open browser", "url", dashURL, "err", err)
+			}
+		}
+		err := httpSrv.Serve(ln)
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 			return

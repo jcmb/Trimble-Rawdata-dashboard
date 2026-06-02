@@ -30,7 +30,7 @@ go run ./cmd/trimble-rawdata-dashboard -port 'tcp://sps855.com:28005' -verbose d
 go run ./cmd/trimble-rawdata-dashboard -dev
 ```
 
-Open http://localhost:8080 (direct/local access).
+Open http://localhost:8080 (direct/local access). On a desktop session the default browser opens automatically; use `-open-browser=false` to disable, or set `NO_BROWSER=1` / `CI=true` to skip detection.
 
 The web UI includes a **Theme** control (System / Light / Dark). System follows the OS preference; the choice is remembered in the browser.
 

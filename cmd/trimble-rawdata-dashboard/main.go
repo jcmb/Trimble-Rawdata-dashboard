@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/gkirk/trimble-rawdata-dashboard/internal/browseropen"
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/server"
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/sessions"
 	"github.com/gkirk/trimble-rawdata-dashboard/internal/verbose"
@@ -23,6 +24,7 @@ func main() {
 	verboseFlag := flag.String("verbose", "off", "debug level: off, info, debug, trace")
 	devFlag := flag.Bool("dev", false, "show developer options in the web UI (also enabled when -verbose is debug or trace)")
 	basePathFlag := flag.String("base-path", "", "URL prefix when served behind a reverse proxy (e.g. /trimble-dashboard)")
+	openBrowserFlag := flag.Bool("open-browser", browseropen.HasGUI(), "open the dashboard in the default web browser (GUI sessions only; set false for servers)")
 	flag.Parse()
 
 	vlevel, err := verbose.ParseLevel(*verboseFlag)
@@ -67,10 +69,11 @@ func main() {
 
 	showDev := *devFlag || vlevel >= verbose.Debug
 	srv := &server.Server{
-		Addr:     *addr,
-		BasePath: server.NormalizeBasePath(*basePathFlag),
-		Sessions: sessMgr,
-		ShowDev:  showDev,
+		Addr:        *addr,
+		BasePath:    server.NormalizeBasePath(*basePathFlag),
+		Sessions:    sessMgr,
+		ShowDev:     showDev,
+		OpenBrowser: *openBrowserFlag,
 	}
 	if showDev {
 		slog.Info("developer web UI options enabled")
